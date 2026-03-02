@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Umma University Leagues</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styte.css">
+</head>
+<body>
+
+<header class="site-header">
+    <div class="container header-inner">
+        <div class="brand">Umma League</div>
+        <nav class="main-nav">
+            <a href="#home">Home</a>
+            <a href="#standings">Standings</a>
+            <a href="#fixtures">Fixtures</a>
+            <a href="#leagueInfo">League Info</a>
+            <a href="#register">Register</a>
+        </nav>
+        <div class="header-actions">
+            <select id="leagueSelect" aria-label="Select league"></select>
+            <button id="loginBtn" class="btn btn-outline">Login</button>
+            <button id="openRegister" class="btn btn-outline">Register</button>
+        </div>
+    </div>
+</header>
+
+<section id="home" class="hero">
+    <div class="container hero-inner">
+        <div>
+            <h1 id="heroLeagueHeading">Umma University Leagues</h1>
+            <p>Welcome to the official Umma University Leagues - fixtures, standings and team registration.</p>
+            <div class="hero-actions">
+                <a href="#standings" class="btn">View Standings</a>
+                <button id="heroRegister" class="btn btn-secondary">Register Team</button>
+            </div>
+            <div class="home-highlights">
+                <div class="highlight-card">
+                    <span>Leagues</span>
+                    <strong id="homeLeagueCount">0</strong>
+                </div>
+                <div class="highlight-card">
+                    <span>Teams</span>
+                    <strong id="homeTeamCount">0</strong>
+                </div>
+                <div class="highlight-card">
+                    <span>Fixtures</span>
+                    <strong id="homeFixtureCount">0</strong>
+                </div>
+            </div>
+        </div>
+        <div class="hero-graphic">
+            <h3>Upcoming Fixtures</h3>
+            <div id="homeNextFixtures" class="hero-fixture-marquee">
+                <div class="marquee-track">
+                    <span class="marquee-item">No fixture scheduled yet</span>
+                </div>
+            </div>
+            <p class="hero-note">Season runs through the semester calendar.</p>
+        </div>
+    </div>
+</section>
+
+<main class="container page-main">
+    <section id="standings" class="card tab-panel active">
+        <h2>Standings</h2>
+        <table class="standings">
+            <thead>
+                <tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>
+            </thead>
+            <tbody id="standingsBody"></tbody>
+        </table>
+    </section>
+
+    <section id="fixtures" class="card tab-panel">
+        <h2>Upcoming Fixtures</h2>
+        <ul id="fixturesList" class="fixtures-list"></ul>
+    </section>
+
+    <section id="leagueInfo" class="card tab-panel">
+        <h3 id="leagueTitle">League</h3>
+        <p id="leagueDesc" class="muted">Select a league to view its details</p>
+    </section>
+
+    <section id="register" class="card register-card tab-panel" style="display:none;position:relative;">
+        <span id="closeRegisterPane" class="modal-close" style="position:absolute;top:8px;right:12px;cursor:pointer">&times;</span>
+        <h2>Register Team</h2>
+        <p id="registerFeeNote" class="muted">Registration Fee: Ksh 500 (M-Pesa reference required)</p>
+        <div class="form">
+            <input type="text" id="teamName" placeholder="Team Name">
+            <input type="text" id="coachName" placeholder="Coach Name">
+            <input type="text" id="phone" placeholder="Phone Number">
+            <input type="text" id="mpesaRef" placeholder="M-Pesa Reference (required for paid leagues)">
+            <input type="email" id="accountEmail" placeholder="Login Email">
+            <input type="password" id="accountPassword" placeholder="Login Password">
+            <input type="password" id="accountPasswordConfirm" placeholder="Confirm Password">
+            <select id="league"></select>
+            <button id="registerBtn" class="btn btn-primary">Register Team</button>
+        </div>
+
+        <div id="clubDashboard" class="club-dashboard" style="display:none;">
+            <h3>Your Club</h3>
+            <div><strong id="dashTeamName"></strong></div>
+            <div>Coach: <span id="dashCoach"></span></div>
+            <div>Phone: <span id="dashPhone"></span></div>
+            <div>Status: <span id="dashStatus"></span></div>
+            <div style="margin-top:10px">
+                <button id="editClubBtn" class="btn">Edit Info</button>
+                <button id="openClubPortalBtn" class="btn">Club Portal</button>
+                <button id="logoutBtn" class="btn btn-outline">Logout</button>
+            </div>
+            <div id="editClubForm" style="display:none;margin-top:10px">
+                <input id="editCoach" placeholder="Coach Name">
+                <input id="editPhone" placeholder="Phone Number">
+                <select id="editStatus">
+                    <option>Pending Payment</option>
+                    <option>Active</option>
+                    <option>Withdrawn</option>
+                </select>
+                <button id="saveClubBtn" class="btn btn-primary">Save</button>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="site-footer">
+    <div class="container">&copy; Umma University Leagues - All rights reserved</div>
+</footer>
+
+<script type="module" src="firebase-bridge.js"></script>
+<script type="module" src="script.js"></script>
+
+<div id="loginModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <span id="closeLogin" class="modal-close">&times;</span>
+        <h3>Club Login</h3>
+        <input id="loginTeam" placeholder="Team Name (leave blank for admin)">
+        <input id="loginEmail" placeholder="Email">
+        <input id="loginPassword" placeholder="Password" type="password">
+        <div style="margin-top:8px;display:flex;gap:8px">
+            <button id="loginSubmit" class="btn btn-primary">Login</button>
+            <button id="createAccountBtn" class="btn">Create Account</button>
+        </div>
+    </div>
+</div>
+
+<div id="squadModal" class="modal" style="display:none">
+    <div class="modal-content">
+        <span id="closeSquad" class="modal-close">&times;</span>
+        <h3>Post Match Squad</h3>
+        <div id="squadFixtureInfo" style="margin-bottom:8px"></div>
+        <div id="squadPlayersList"></div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+            <button id="saveSquadBtn" class="btn btn-primary">Save Squad</button>
+            <button id="cancelSquadBtn" class="btn btn-outline">Cancel</button>
+        </div>
+    </div>
+</div>
+
+<div id="adminPanel" class="modal" style="display:none">
+    <div class="modal-content">
+        <span id="closeAdmin" class="modal-close">&times;</span>
+        <h3>Admin Panel</h3>
+        <div style="margin-top:8px">
+            <h4>Create League</h4>
+            <input id="newLeagueName" placeholder="League name">
+            <button id="createLeagueBtn" class="btn">Create</button>
+        </div>
+        <div style="margin-top:8px">
+            <h4>Create Fixture</h4>
+            <select id="fixtureLeague"></select>
+            <select id="fixtureHome"></select>
+            <select id="fixtureAway"></select>
+            <input id="fixtureDate" placeholder="YYYY-MM-DD HH:MM">
+            <button id="createFixtureBtn" class="btn">Create Fixture</button>
+        </div>
+        <div style="margin-top:12px">
+            <h4>Summary</h4>
+            <div id="adminSummary"></div>
+        </div>
+        <div style="margin-top:12px">
+            <h4>Registered Teams</h4>
+            <div style="margin-bottom:8px;max-width:320px">
+                <label for="adminTeamsLeagueFilter"><strong>League:</strong></label>
+                <select id="adminTeamsLeagueFilter">
+                    <option value="">Select league</option>
+                </select>
+            </div>
+            <table class="simple-table">
+                <thead>
+                    <tr><th>Team</th><th>League</th><th>Status</th><th>Actions</th></tr>
+                </thead>
+                <tbody id="adminTeamsBody"></tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+</body>
+</html>
+
+

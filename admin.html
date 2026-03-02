@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Umma Leagues Admin</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="admin.css">
+</head>
+<body>
+    <header class="admin-header">
+        <div class="container header-inner">
+            <div class="header-left">
+                <button id="hamburgerBtn" class="hamburger" type="button" aria-label="Open admin menu" style="display:none">☰</button>
+                <div class="brand">Umma League Admin</div>
+            </div>
+            <a class="back-link" href="register.html">Back To Site</a>
+        </div>
+        <nav id="adminMenuPanel" class="admin-menu" style="display:none">
+            <button type="button" class="menu-link" data-target="dashboardSection">Dashboard</button>
+            <button type="button" class="menu-link" data-target="leaguesSection">Leagues</button>
+            <button type="button" class="menu-link" data-target="fixturesSection">Fixtures</button>
+            <button type="button" class="menu-link" data-target="resultsSection">Results</button>
+            <button type="button" class="menu-link" data-target="teamsSection">Teams</button>
+        </nav>
+    </header>
+
+    <main class="container" style="padding:20px 0 30px">
+        <section id="adminLoginCard" class="card login-card">
+            <h2>Admin Login</h2>
+            <p class="muted">Use your admin credentials to manage all user-side data.</p>
+            <div class="grid-2">
+                <input id="adminEmail" placeholder="Admin Email">
+                <input id="adminPass" type="password" placeholder="Admin Password">
+            </div>
+            <div style="margin-top:10px">
+                <button id="adminLoginBtn" class="btn btn-primary">Login</button>
+            </div>
+        </section>
+
+        <section id="adminApp" style="display:none">
+            <div class="top-actions">
+                <button id="refreshAdminBtn" class="btn">Refresh</button>
+                <button id="openSiteBtn" class="btn btn-outline">Open User Site</button>
+                <button id="adminLogoutBtn" class="btn btn-outline">Logout</button>
+            </div>
+
+            <section id="dashboardSection" class="card">
+                <h3>Dashboard</h3>
+                <div class="stats-grid">
+                    <div class="stat"><span>Leagues</span><strong id="statLeagues">0</strong></div>
+                    <div class="stat"><span>Teams</span><strong id="statTeams">0</strong></div>
+                    <div class="stat"><span>Fixtures</span><strong id="statFixtures">0</strong></div>
+                    <div class="stat"><span>Players</span><strong id="statPlayers">0</strong></div>
+                    <div class="stat"><span>Club Accounts</span><strong id="statAccounts">0</strong></div>
+                </div>
+            </section>
+
+            <section id="leaguesSection" class="card">
+                <h3>Leagues</h3>
+                <div class="grid-2">
+                    <input id="leagueNameInput" placeholder="League Name">
+                    <input id="leagueDescInput" placeholder="League Description (semester format)">
+                </div>
+                <div style="margin-top:10px">
+                    <button id="addLeagueBtn" class="btn btn-primary">Add League</button>
+                </div>
+                <table class="simple-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>Name</th><th>Description</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="adminLeaguesBody"></tbody>
+                </table>
+            </section>
+
+            <section id="fixturesSection" class="card">
+                <h3>Fixtures</h3>
+                <div class="grid-4">
+                    <input id="semesterStartInput" type="date" placeholder="Semester Start">
+                    <input id="semesterEndInput" type="date" placeholder="Semester End">
+                    <select id="semesterDayInput">
+                        <option value="monday">Monday</option>
+                        <option value="tuesday">Tuesday</option>
+                        <option value="wednesday">Wednesday</option>
+                        <option value="thursday">Thursday</option>
+                        <option value="friday">Friday</option>
+                        <option value="saturday">Saturday</option>
+                        <option value="sunday">Sunday</option>
+                    </select>
+                    <input id="semesterKickoffInput" type="time" value="15:00">
+                </div>
+                <div class="grid-2" style="margin-top:10px">
+                    <select id="scheduleModeInput">
+                        <option value="weekly">Weekly (every 7 days)</option>
+                        <option value="weekend">Weekend only (Sat/Sun)</option>
+                        <option value="hybrid">Hybrid (weekend + midweek)</option>
+                    </select>
+                    <div class="muted" style="align-self:center">Calendar mode controls auto fixture scheduling pattern.</div>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="saveSemesterBtn" class="btn">Save Semester Calendar</button>
+                    <select id="planLeagueInput"></select>
+                    <button id="planLeagueFixturesBtn" class="btn btn-primary">Plan Selected League Fixtures</button>
+                    <button id="autoPlanFixturesBtn" class="btn btn-primary">Plan All Leagues</button>
+                </div>
+                <div id="planLeagueHint" class="muted" style="margin-top:8px"></div>
+                <div class="grid-3">
+                    <select id="fixtureLeagueInput"></select>
+                    <input id="fixtureHomeInput" list="fixtureTeamList" placeholder="Home Team">
+                    <input id="fixtureAwayInput" list="fixtureTeamList" placeholder="Away Team">
+                </div>
+                <div class="grid-3" style="margin-top:10px">
+                    <input id="fixtureDateInput" type="date" placeholder="Game Date">
+                    <input id="fixtureTimeInput" type="time" value="15:00" placeholder="Game Time">
+                    <input id="fixtureDayPreview" placeholder="Day auto" readonly>
+                </div>
+                <datalist id="fixtureTeamList"></datalist>
+                <div id="manualFixtureHint" class="muted" style="margin-top:8px"></div>
+                <div style="margin-top:10px">
+                    <button id="addFixtureBtn" class="btn btn-primary">Create Fixture</button>
+                </div>
+                <table class="simple-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>League</th><th>Match</th><th>Date</th><th>Status</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="adminFixturesBody"></tbody>
+                </table>
+            </section>
+
+            <section id="teamsSection" class="card">
+                <h3>Registered Teams</h3>
+                <div style="margin-bottom:10px">
+                    <h4 style="margin:0 0 6px">All Registered Teams By League</h4>
+                    <div id="adminTeamsByLeague" class="muted">No teams registered yet.</div>
+                </div>
+                <div style="margin-bottom:10px">
+                    <h4 style="margin:0 0 6px">All Registered Teams Management</h4>
+                    <table class="simple-table">
+                        <thead>
+                            <tr><th>Team</th><th>League</th><th>Payment</th><th>Status</th><th>Actions</th></tr>
+                        </thead>
+                        <tbody id="adminAllTeamsBody"></tbody>
+                    </table>
+                </div>
+                <div class="grid-2" style="margin-bottom:10px">
+                    <div>
+                        <label for="adminTeamLeagueFilter"><strong>League Filter:</strong></label>
+                        <select id="adminTeamLeagueFilter"></select>
+                    </div>
+                </div>
+                <div style="margin-bottom:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="carryQualifiedBtn" class="btn">Carry Top 6 To Champions League</button>
+                    <button id="finishPremierBtn" class="btn btn-primary">Finish Premier League</button>
+                </div>
+                <div class="grid-2" style="margin-bottom:10px">
+                    <div class="muted">
+                        <strong>Top 6 (to Champions League):</strong>
+                        <div id="premierTopSixPreview">-</div>
+                    </div>
+                    <div class="muted">
+                        <strong>Relegated Teams:</strong>
+                        <div id="premierRelegatedPreview">-</div>
+                    </div>
+                </div>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>Team</th><th>League</th><th>Semester</th><th>M-Pesa Ref</th><th>Coach</th><th>Phone</th><th>Payment</th><th>Status</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="adminTeamsBody"></tbody>
+                </table>
+            </section>
+
+            <section id="resultsSection" class="card">
+                <h3>Results & Standings Update</h3>
+                <div>
+                    <select id="resultFixtureInput"></select>
+                </div>
+                <div id="resultTeamsLabel" class="muted" style="margin-top:8px"></div>
+                <div class="grid-2" style="margin-top:10px">
+                    <input id="currentScoreInput" placeholder="Current Score" readonly>
+                    <input id="currentStatusInput" placeholder="Match Status" readonly>
+                </div>
+                <div class="grid-2" style="margin-top:10px">
+                    <input id="goalMinuteInput" type="number" min="1" max="130" placeholder="Minute">
+                    <input id="goalScorerInput" placeholder="Scorer Name (optional)">
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="homeGoalBtn" class="btn">Home Goal</button>
+                    <button id="awayGoalBtn" class="btn">Away Goal</button>
+                    <button id="undoGoalBtn" class="btn btn-outline">Undo Last Goal</button>
+                </div>
+                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="saveHalfTimeBtn" class="btn">Save First Half</button>
+                    <button id="saveResultBtn" class="btn btn-primary">Save Full Time</button>
+                    <button id="refreshResultsBtn" class="btn">Refresh Results</button>
+                </div>
+                <div id="resultHint" class="muted" style="margin-top:8px"></div>
+                <table class="simple-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>Minute</th><th>Team</th><th>Scorer</th><th>Half</th></tr>
+                    </thead>
+                    <tbody id="goalEventsBody"></tbody>
+                </table>
+            </section>
+        </section>
+    </main>
+
+    <script type="module" src="firebase-bridge.js"></script>
+<script type="module" src="admin.js"></script>
+</body>
+</html>
+
+

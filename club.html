@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Club Portal - Umma Leagues</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="club.css">
+</head>
+<body>
+    <header class="portal-header">
+        <div class="container header-inner">
+            <div class="header-left">
+                <button id="clubHamburgerBtn" class="hamburger" type="button" aria-label="Open club menu">&#9776;</button>
+                <div class="brand">Club Portal</div>
+            </div>
+            <div class="header-actions">
+                <a href="register.html" class="btn btn-outline">Back To Site</a>
+                <button id="clubLogoutBtn" class="btn btn-outline">Logout</button>
+            </div>
+        </div>
+        <nav id="clubMenuPanel" class="club-menu">
+            <button type="button" class="menu-link active" data-target="clubProfileSection">Profile</button>
+            <button type="button" class="menu-link" data-target="clubPlayersSection">Players</button>
+            <button type="button" class="menu-link" data-target="clubSquadSection">Squad</button>
+            <button type="button" class="menu-link" data-target="clubFixturesSection">Fixtures</button>
+            <button type="button" class="menu-link" data-target="clubStandingsSection">Standings</button>
+            <button type="button" class="menu-link" data-target="clubSotwHistorySection">History</button>
+        </nav>
+    </header>
+
+    <main class="container main-space">
+        <section id="clubAuthNotice" class="card" style="display:none">
+            <h2>Login Required</h2>
+            <p class="muted">Please login as a registered team from the main site first.</p>
+            <a href="register.html" class="btn">Go To Main Site</a>
+        </section>
+
+        <section id="clubPortalApp" style="display:none">
+            <section id="clubProfileSection" class="card club-panel">
+                <h2 id="clubNameHeading">Club</h2>
+                <div class="grid-2" style="margin-bottom:10px">
+                    <div>
+                        <label for="clubLeagueViewSelect"><strong>League View:</strong></label>
+                        <select id="clubLeagueViewSelect"></select>
+                    </div>
+                </div>
+                <div class="grid-2">
+                    <div><strong>League:</strong> <span id="clubLeague"></span></div>
+                    <div><strong>Status:</strong> <span id="clubStatus"></span></div>
+                    <div><strong>Payment:</strong> <span id="clubPayment"></span></div>
+                    <div><strong>Coach:</strong> <span id="clubCoach"></span></div>
+                    <div><strong>Phone:</strong> <span id="clubPhone"></span></div>
+                </div>
+                <div class="grid-2" style="margin-top:10px">
+                    <input id="clubCoachInput" placeholder="Update Coach Name">
+                    <input id="clubPhoneInput" placeholder="Update Phone">
+                </div>
+                <div style="margin-top:10px">
+                    <button id="saveClubInfoBtn" class="btn btn-primary">Save Club Info</button>
+                </div>
+            </section>
+
+            <section id="clubPlayersSection" class="card club-panel" style="display:none">
+                <h3>Players</h3>
+                <div class="grid-player">
+                    <input id="newPlayerInput" placeholder="Player full name">
+                    <button id="addPlayerBtn" class="btn">Add Player</button>
+                </div>
+                <table class="simple-table" style="margin-top:10px">
+                    <thead>
+                        <tr><th>Player</th><th>Action</th></tr>
+                    </thead>
+                    <tbody id="clubPlayersBody"></tbody>
+                </table>
+            </section>
+
+            <section id="clubSquadSection" class="card club-panel" style="display:none">
+                <h3>Squad Of The Week</h3>
+                <div class="grid-2">
+                    <select id="squadFixtureSelect"></select>
+                    <input id="squadWeekLabel" placeholder="Week Label e.g. Week 3" />
+                </div>
+                <div class="grid-2" style="margin-top:10px">
+                    <input id="squadSubsInput" placeholder="Substitutes (comma separated)">
+                    <div class="muted" style="align-self:center">Choose starters below, then list substitutes by name.</div>
+                </div>
+                <div id="squadPlayerChecks" class="player-checks"></div>
+                <div id="squadStarterCount" class="muted" style="margin-top:8px">Starters selected: 0</div>
+                <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+                    <button id="saveSotwBtn" class="btn btn-primary">Save Squad Of The Week</button>
+                    <button id="postMatchSquadBtn" class="btn">Post Match Squad</button>
+                </div>
+                <div class="muted" style="margin-top:8px">Post Match Squad writes into fixtures for official match records.</div>
+            </section>
+
+            <section id="clubFixturesSection" class="card club-panel" style="display:none">
+                <h3>My Fixtures</h3>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>League</th><th>Match</th><th>Date</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="clubFixturesBody"></tbody>
+                </table>
+            </section>
+
+            <section id="clubStandingsSection" class="card club-panel" style="display:none">
+                <h3>League Standings</h3>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>
+                    </thead>
+                    <tbody id="clubStandingsBody"></tbody>
+                </table>
+            </section>
+
+            <section id="clubSotwHistorySection" class="card club-panel" style="display:none">
+                <h3>Saved Squad Of The Week History</h3>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>Week</th><th>Fixture</th><th>Players</th></tr>
+                    </thead>
+                    <tbody id="sotwHistoryBody"></tbody>
+                </table>
+            </section>
+        </section>
+    </main>
+
+    <script type="module" src="firebase-bridge.js"></script>
+<script type="module" src="club.js"></script>
+</body>
+</html>
+
+
+
