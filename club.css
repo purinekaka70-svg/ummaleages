@@ -41,7 +41,7 @@ body{
   cursor:pointer;
   font-size:18px;
   line-height:1;
-  display:block;
+  display:none;
 }
 .club-menu{
   display:flex;
@@ -161,15 +161,19 @@ input,select{
   .header-inner{align-items:flex-start;flex-wrap:wrap}
   .header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
   .header-actions .btn{width:100%}
+  .grid-2{grid-template-columns:1fr}
+  .grid-player{grid-template-columns:1fr}
+  .player-checks{grid-template-columns:1fr}
+  .simple-table{display:block;overflow-x:auto;white-space:nowrap}
+}
+
+@media(max-width:900px){
+  .hamburger{display:block}
   .club-menu{display:none}
   .club-menu.open{display:flex}
   .club-menu{width:100%;flex-direction:column}
   .club-menu{padding:10px 12px 12px}
   .menu-link{width:100%;text-align:left}
-  .grid-2{grid-template-columns:1fr}
-  .grid-player{grid-template-columns:1fr}
-  .player-checks{grid-template-columns:1fr}
-  .simple-table{display:block;overflow-x:auto;white-space:nowrap}
 }
 
 @media(max-width:640px){
