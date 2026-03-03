@@ -365,7 +365,10 @@ function bindAdminActions(){
     });
     if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', carryQualifiedTeamsToChampions);
     if(finishPremierBtn) finishPremierBtn.addEventListener('click', finishPremierLeague);
-    if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', renderTeamTable);
+    if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', ()=>{
+        renderTeamTable();
+        renderAllTeamsManagementTable();
+    });
 
     if(teamsBody){
         teamsBody.addEventListener('click', (e)=>{
@@ -622,7 +625,9 @@ async function renderAllAdminData(forceReload = false){
 function renderAllTeamsManagementTable(){
     const body = document.getElementById('adminAllTeamsBody');
     if(!body) return;
+    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '__all__';
     const teams = getJSON('teams', [])
+        .filter((t)=> leagueFilter === '__all__' || t.league === leagueFilter)
         .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.teamName || '').localeCompare(String(b.teamName || '')));
     body.innerHTML = '';
     if(teams.length === 0){
@@ -726,7 +731,14 @@ function renderLeagueTable(){
 function populateTeamLeagueFilter(){
     const sel = document.getElementById('adminTeamLeagueFilter');
     if(!sel) return;
-    const leagues = getJSON('leagues', []).map((l)=> l.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    const leagueSet = new Set(
+        getJSON('leagues', []).map((l)=> l.name).filter(Boolean)
+    );
+    getJSON('teams', []).forEach((t)=>{
+        const leagueName = String(t?.league || '').trim();
+        if(leagueName) leagueSet.add(leagueName);
+    });
+    const leagues = [...leagueSet].sort((a,b)=> String(a).localeCompare(String(b)));
     const previous = sel.value || '__all__';
     sel.innerHTML = '';
     sel.appendChild(new Option('All Leagues', '__all__'));
@@ -745,6 +757,12 @@ function renderTeamTable(){
     const teams = getJSON('teams', [])
         .filter((t)=> leagueFilter === '__all__' || t.league === leagueFilter);
     body.innerHTML = '';
+    if(teams.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="9" class="muted">No teams found for selected league.</td>';
+        body.appendChild(tr);
+        return;
+    }
     teams.forEach((t)=>{
         const id = slugify(t.teamName);
         const statusId = `team-status-${id}`;
