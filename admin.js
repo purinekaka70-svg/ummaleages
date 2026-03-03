@@ -242,6 +242,19 @@ function normalizeLeagueRow(league){
     return { id: id || slugify(name), name, desc };
 }
 
+function getMergedLeagues(){
+    const map = new Map();
+    ADMIN_DEFAULT_LEAGUES.forEach((league)=>{
+        const row = normalizeLeagueRow(league);
+        if(row.name) map.set(row.id || row.name, row);
+    });
+    getJSON('leagues', []).forEach((league)=>{
+        const row = normalizeLeagueRow(league);
+        if(row.name) map.set(row.id || row.name, row);
+    });
+    return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+}
+
 async function hydrateAdminCollectionsFromFirestore(){
     const [leagues, teams, fixtures, standings, players, users] = await Promise.all([
         fetchCollectionFromDb('leagues'),
@@ -751,7 +764,7 @@ function renderTeamsByLeagueDirectory(){
 }
 
 function renderStats(){
-    const leagues = getJSON('leagues', []);
+    const leagues = getMergedLeagues();
     const teams = getJSON('teams', []);
     const fixtures = getJSON('fixtures', []);
     const players = getJSON('players', []);
@@ -766,7 +779,7 @@ function renderStats(){
 function renderLeagueTable(){
     const body = document.getElementById('adminLeaguesBody');
     if(!body) return;
-    const leagues = getJSON('leagues', []);
+    const leagues = getMergedLeagues();
     body.innerHTML = '';
     leagues.forEach((l)=>{
         const tr = document.createElement('tr');
@@ -787,12 +800,7 @@ function renderLeagueTable(){
 function populateTeamLeagueFilter(){
     const sel = document.getElementById('adminTeamLeagueFilter');
     if(!sel) return;
-    const leagueSet = new Set(
-        getJSON('leagues', []).map((l)=> l.name).filter(Boolean)
-    );
-    ADMIN_DEFAULT_LEAGUES.forEach((league)=>{
-        if(league?.name) leagueSet.add(league.name);
-    });
+    const leagueSet = new Set(getMergedLeagues().map((l)=> l.name).filter(Boolean));
     getJSON('teams', []).forEach((t)=>{
         const leagueName = String(t?.league || '').trim();
         if(leagueName) leagueSet.add(leagueName);
@@ -895,7 +903,7 @@ function renderFixtureTable(){
 }
 
 function populateFixtureInputs(){
-    const leagues = getJSON('leagues', []);
+    const leagues = getMergedLeagues();
     const leagueSel = document.getElementById('fixtureLeagueInput');
     const planLeagueSel = document.getElementById('planLeagueInput');
     const currentFixtureLeague = leagueSel?.value || '';
