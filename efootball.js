@@ -1,9 +1,11 @@
 import { doc, setDoc, getDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 const EF_LEAGUES = [
-    { id: "ef-premier", name: "E-Football Premier League", fee: 200 },
-    { id: "ef-champions", name: "E-Football Champions League", fee: 200 },
-    { id: "ef-cup", name: "E-Football Cup", fee: 200 }
+    { id: "ef-umma-premier", name: "Umma Premier League", fee: 200 },
+    { id: "ef-umma-champions", name: "Umma Champions League", fee: 200 },
+    { id: "ef-umma-carabao", name: "Umma Carabao Cup", fee: 200 },
+    { id: "ef-umma-kajiado", name: "Umma Kajiado Cup", fee: 200 },
+    { id: "ef-friendly-league", name: "Friendly League", fee: 200 }
 ];
 
 document.addEventListener("DOMContentLoaded", ()=>{ initEfootball(); });
