@@ -1,4 +1,4 @@
-import { doc, setDoc, getDoc, query, where, collection, getDocs, deleteDoc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { doc, setDoc, getDoc, query, where, collection, getDocs, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', ()=>{ init(); });
 let showAllLeaguesFixtures = false;
@@ -27,6 +27,8 @@ function slug(value){
 const COLLECTION_CACHE_TTL_MS = 5000;
 const collectionCache = new Map();
 const collectionInFlight = new Map();
+const directFirestoreUnsubs = [];
+let userUiRefreshTimer = null;
 
 function invalidateCollectionCache(name){
     if(name){
@@ -67,6 +69,22 @@ async function fetchCollection(name, options = {}){
     return fetchPromise;
 }
 
+function setCollectionCache(name, data, ttlMs = COLLECTION_CACHE_TTL_MS){
+    const key = String(name || '');
+    collectionCache.set(key, { data: Array.isArray(data) ? data : [], expiresAt: Date.now() + ttlMs });
+}
+
+function scheduleUserUiRefresh(){
+    if(userUiRefreshTimer) clearTimeout(userUiRefreshTimer);
+    userUiRefreshTimer = setTimeout(()=>{
+        renderStandings();
+        renderFixtures();
+        renderRegisteredTeams();
+        renderHomeHighlights();
+        renderLeagueInfo();
+    }, 140);
+}
+
 let semesterCalendarCache = { value: null, expiresAt: 0, inFlight: null };
 async function getSemesterCalendar(options = {}){
     if(!window.ummaFire?.db) return null;
@@ -93,6 +111,41 @@ async function getSemesterCalendar(options = {}){
     })();
     semesterCalendarCache.inFlight = loadPromise;
     return loadPromise;
+}
+
+function stopDirectFirestoreSubscriptions(){
+    while(directFirestoreUnsubs.length){
+        const unsub = directFirestoreUnsubs.pop();
+        try{ unsub(); } catch {}
+    }
+}
+
+function startDirectFirestoreSubscriptions(){
+    if(!window.ummaFire?.db) return;
+    stopDirectFirestoreSubscriptions();
+    const db = window.ummaFire.db;
+    const collections = ['leagues', 'teams', 'fixtures', 'standings', 'players', 'users'];
+    collections.forEach((name)=>{
+        const unsub = onSnapshot(collection(db, name), (snap)=>{
+            const data = snap.docs.map((d)=> d.data());
+            setCollectionCache(name, data);
+            if(name === 'leagues'){
+                renderLeagueSelect();
+                populateRegisterLeagueSelect();
+            }
+            scheduleUserUiRefresh();
+        });
+        directFirestoreUnsubs.push(unsub);
+    });
+    const calUnsub = onSnapshot(collection(db, 'semesterCalendar'), (snap)=>{
+        semesterCalendarCache = {
+            value: snap.docs.length > 0 ? snap.docs[0].data() : null,
+            expiresAt: Date.now() + COLLECTION_CACHE_TTL_MS,
+            inFlight: null
+        };
+        scheduleUserUiRefresh();
+    });
+    directFirestoreUnsubs.push(calUnsub);
 }
 
 function readPersistentValue(key){
@@ -239,6 +292,26 @@ const HARDCODED_LEAGUES = [
     }
 ];
 
+async function getVisibleLeagues(){
+    const fromDb = await fetchCollection('leagues');
+    const byName = new Map();
+    HARDCODED_LEAGUES.forEach((league)=> byName.set(String(league.name || '').trim().toLowerCase(), { ...league }));
+    fromDb.forEach((league)=>{
+        const name = String(league?.name || '').trim();
+        if(!name) return;
+        const key = name.toLowerCase();
+        const existing = byName.get(key) || {};
+        byName.set(key, {
+            ...existing,
+            ...league,
+            id: league.id || existing.id || slug(name),
+            name,
+            desc: league.desc || existing.desc || 'Semester competition format.'
+        });
+    });
+    return [...byName.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+}
+
 async function init(){
     clearLegacyLocalTeamData();
     syncMemoryStoreToPersistent();
@@ -264,7 +337,12 @@ async function init(){
     updateHeroLeagueHeading();
     openTabFromHash();
     initRegistrationMetaFields();
-    startRemoteSubscription();
+    if(window.ummaFire?.db){
+        startDirectFirestoreSubscriptions();
+        window.addEventListener('beforeunload', stopDirectFirestoreSubscriptions);
+    } else {
+        startRemoteSubscription();
+    }
 }
 
 function clearLegacyLocalTeamData(){
@@ -758,7 +836,7 @@ function renderFixturePublicSquad(fixture){
 
 async function renderLeagueSelect(){
     const sel = document.getElementById('leagueSelect');
-    const leagues = HARDCODED_LEAGUES;
+    const leagues = await getVisibleLeagues();
     const previous = sel.value;
     sel.innerHTML = '';
     const placeholder = document.createElement('option');
@@ -788,7 +866,7 @@ async function renderLeagueSelect(){
 async function populateRegisterLeagueSelect(){
     const sel = document.getElementById('league');
     if(!sel) return;
-    const leagues = HARDCODED_LEAGUES;
+    const leagues = await getVisibleLeagues();
     sel.innerHTML = '';
     const opt = document.createElement('option'); opt.value = ''; opt.textContent = 'Select League'; sel.appendChild(opt);
     leagues.forEach(l=> sel.appendChild(new Option(l.name, l.name)));
@@ -859,7 +937,7 @@ function startRemoteSubscription(){
 async function renderLeagueInfo(){
     const sel = document.getElementById('leagueSelect');
     const desc = document.getElementById('leagueDesc');
-    const leagues = HARDCODED_LEAGUES;
+    const leagues = await getVisibleLeagues();
     const l = leagues.find(x=> x.name === sel.value);
     if(l){
         // Build info from Firestore data
