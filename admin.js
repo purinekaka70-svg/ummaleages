@@ -1,4 +1,4 @@
-import { collection, getDocs } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { collection, getDocs, doc, setDoc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', ()=>{ initAdmin(); });
 const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
@@ -8,6 +8,33 @@ const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
 let adminRefreshTimer = null;
 const adminWindowFocusRefresh = ()=>{ renderAllAdminData(true); };
+const ADMIN_DEFAULT_LEAGUES = [
+    {
+        id:'umma-premier',
+        name:'Umma Premier League',
+        desc:'Semester format: round-robin league played over semester weeks, and table ranking decides the winner.'
+    },
+    {
+        id:'umma-champ',
+        name:'Umma Champions League',
+        desc:'Semester format: league fixtures through semester weeks with top clubs progressing to semester-end playoffs.'
+    },
+    {
+        id:'umma-carabao',
+        name:'Umma Carabao Cup',
+        desc:'Semester knockout cup. Single-elimination matches are scheduled week by week until the cup final.'
+    },
+    {
+        id:'umma-kajiado',
+        name:'Umma Kajiado Cup',
+        desc:'Semester regional cup with structured rounds and final ranking/playoff.'
+    },
+    {
+        id:'friendly-league',
+        name:'Friendly League',
+        desc:'Free opening matches league for preparation fixtures.'
+    }
+];
 
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
@@ -59,6 +86,7 @@ async function initAdmin(){
     await ensureAdminAuthSeed();
     ensureAdminSeed();
     ensureSemesterCalendarSeed();
+    await ensureDefaultLeaguesInFirebase();
     bindAdminMenu();
     bindAdminAuth();
     bindAdminActions();
@@ -131,6 +159,24 @@ function applyRemoteState(remote){
             writePersistentValue(key, value);
         }
     });
+}
+
+async function ensureDefaultLeaguesInFirebase(){
+    if(!window.ummaFire?.db) return;
+    try{
+        const leagues = await fetchCollectionFromDb('leagues');
+        if(leagues.length > 0) return;
+        await Promise.all(ADMIN_DEFAULT_LEAGUES.map((league)=>
+            setDoc(doc(window.ummaFire.db, 'leagues', league.id), {
+                id: league.id,
+                name: league.name,
+                desc: league.desc,
+                updatedAtMs: Date.now()
+            }, { merge: true })
+        ));
+    } catch {
+        // ignore seed errors
+    }
 }
 
 async function fetchCollectionFromDb(name){
@@ -822,7 +868,7 @@ function updateManualDayPreview(){
     dayPreview.value = days[d.getDay()];
 }
 
-function addLeague(){
+async function addLeague(){
     const rawName = document.getElementById('leagueNameInput').value.trim();
     const descInput = document.getElementById('leagueDescInput').value.trim();
     const name = collapseSpaces(rawName);
@@ -840,11 +886,26 @@ function addLeague(){
         return;
     }
     const desc = collapseSpaces(descInput) || 'Semester format: fixtures are scheduled week-by-week through the semester.';
-    leagues.push({id: slugify(name), name, desc});
-    setJSON('leagues', leagues);
+    const id = slugify(name);
+    if(window.ummaFire?.db){
+        try{
+            await setDoc(doc(window.ummaFire.db, 'leagues', id), {
+                id,
+                name,
+                desc,
+                updatedAtMs: Date.now()
+            }, { merge: true });
+        } catch {
+            alert('Failed to save league to Firebase');
+            return;
+        }
+    } else {
+        leagues.push({id, name, desc});
+        setJSON('leagues', leagues);
+    }
     document.getElementById('leagueNameInput').value = '';
     document.getElementById('leagueDescInput').value = '';
-    renderAllAdminData();
+    await renderAllAdminData(true);
 }
 
 function addFixture(){
