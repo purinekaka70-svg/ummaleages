@@ -37,6 +37,7 @@ function getLeagueByName(name){
 
 async function initEfootball(){
     bindUi();
+    applyLeagueOptions(EF_LEAGUES);
     await ensureLeagues();
     await renderLeagueSelects();
     setRegisterPanelVisible(false);
@@ -76,6 +77,37 @@ async function initEfootball(){
             await renderStandings();
             await renderMyMatches();
         });
+    }
+}
+
+function applyLeagueOptions(leagues){
+    const regSelect = document.getElementById("efLeagueSelect");
+    const viewSelect = document.getElementById("efLeagueView");
+    const safeLeagues = Array.isArray(leagues) ? leagues : [];
+
+    if(regSelect){
+        const previous = regSelect.value || "";
+        regSelect.innerHTML = "";
+        regSelect.appendChild(new Option("Select League (Ksh 200)", ""));
+        safeLeagues.forEach((league)=>{
+            regSelect.appendChild(new Option(`${league.name} (Ksh ${Number(league.fee || 200)})`, league.name));
+        });
+        if(previous && safeLeagues.some((league)=> league.name === previous)){
+            regSelect.value = previous;
+        }
+    }
+
+    if(viewSelect){
+        const previous = viewSelect.value || "";
+        viewSelect.innerHTML = "";
+        safeLeagues.forEach((league)=> viewSelect.appendChild(new Option(league.name, league.name)));
+        if(previous && safeLeagues.some((league)=> league.name === previous)){
+            viewSelect.value = previous;
+            currentLeague = previous;
+        } else if(safeLeagues.length){
+            viewSelect.value = safeLeagues[0].name;
+            currentLeague = safeLeagues[0].name;
+        }
     }
 }
 
@@ -142,25 +174,7 @@ async function ensureLeagues(){
 
 async function renderLeagueSelects(){
     const leagues = await fetchLeagues();
-    const regSelect = document.getElementById("efLeagueSelect");
-    const viewSelect = document.getElementById("efLeagueView");
-    if(regSelect){
-        regSelect.innerHTML = "";
-        regSelect.appendChild(new Option("Select League (Ksh 200)", ""));
-        leagues.forEach((l)=> regSelect.appendChild(new Option(`${l.name} (Ksh ${l.fee})`, l.name)));
-    }
-    if(viewSelect){
-        const previous = viewSelect.value || "";
-        viewSelect.innerHTML = "";
-        leagues.forEach((l)=> viewSelect.appendChild(new Option(l.name, l.name)));
-        if(previous && leagues.some((l)=> l.name === previous)){
-            viewSelect.value = previous;
-            currentLeague = previous;
-        } else if(leagues.length){
-            viewSelect.value = leagues[0].name;
-            currentLeague = leagues[0].name;
-        }
-    }
+    applyLeagueOptions(leagues);
 }
 
 async function fetchLeagues(){
