@@ -41,6 +41,13 @@ function syncMemoryStoreToPersistent(){
     });
 }
 
+function appUrl(path){
+    if(window.ummaNav?.buildAppUrl){
+        return window.ummaNav.buildAppUrl(path);
+    }
+    return new URL(String(path || 'register.html'), window.location.href).toString();
+}
+
 async function initAdmin(){
     clearLegacyLocalTeamData();
     syncMemoryStoreToPersistent();
@@ -183,7 +190,7 @@ function bindAdminActions(){
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
 
     if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
-    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open('register.html', '_blank'));
+    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('register.html'), '_blank'));
     if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
     if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
     if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', saveSemesterCalendar);
@@ -395,41 +402,39 @@ function saveSemesterCalendar(){
     alert('Semester calendar saved');
 }
 
-async function adminLogin(){
+    async function adminLogin() {
     const email = document.getElementById('adminEmail').value.trim().toLowerCase();
     const pass = document.getElementById('adminPass').value;
-    if(!email || !pass){
+
+    if (!email || !pass) {
         alert('Enter admin email and password');
         return;
     }
-    if(!window.ummaAuth?.loginAuthUser){
+
+    if (!window.ummaAuth?.loginAuthUser) {
         alert('Authentication service is not ready. Reload and try again.');
         return;
     }
-    try{
-        await window.ummaAuth.loginAuthUser(email, pass);
-    } catch {
-        alert('Invalid admin email or password');
-        return;
-    }
-    const accounts = getJSON('accounts', []);
-    const admin = accounts.find((a)=>
-        a.role === 'admin'
-        && String(a.email || '').toLowerCase() === email
-    );
-    if(!admin){
-        try{
-            await window.ummaAuth.logoutAuthUser();
-        } catch {
-            // Ignore sign-out errors.
-        }
-        alert('Invalid admin credentials');
-        return;
-    }
-    sessionStorage.setItem('adminAuth', 'true');
-    hydrateAdminView();
-}
 
+    try {
+        // Login using Firebase Auth
+        await window.ummaAuth.loginAuthUser(email, pass);
+
+        // Only allow the specific admin account
+        if (email !== 'admin@umma.local') {
+            await window.ummaAuth.logoutAuthUser();
+            alert('Invalid admin credentials');
+            return;
+        }
+
+        // Successful admin login
+        sessionStorage.setItem('adminAuth', 'true');
+        hydrateAdminView();
+    } catch (err) {
+        console.error(err);
+        alert('Invalid admin email or password');
+    }
+}
 async function adminLogout(){
     sessionStorage.removeItem('adminAuth');
     if(window.ummaAuth?.logoutAuthUser){

@@ -5,11 +5,6 @@ let showAllLeaguesFixtures = false;
 // if true skip all localStorage persistence and rely solely on Firebase (remote store)
 const FORCE_REMOTE_ONLY = true;
 
-// when in remote-only mode, clear any existing local storage to avoid confusion
-if(FORCE_REMOTE_ONLY){
-    try{ localStorage.clear(); } catch {}
-}
-
 const appMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || window.__UMMA_DB__
     || (window.__UMMA_DB__ = {});
@@ -98,6 +93,13 @@ function storageSet(key, value){
     } else {
         writePersistentValue(key, str);
     }
+}
+
+function appUrl(path){
+    if(window.ummaNav?.buildAppUrl){
+        return window.ummaNav.buildAppUrl(path);
+    }
+    return new URL(String(path || 'register.html'), window.location.href).toString();
 }
 
 
@@ -611,7 +613,7 @@ async function renderFixtures(options = {}){
         const publicSquad = showPublicSquad ? renderFixturePublicSquad(f) : '';
         li.innerHTML = `${leagueTag}<strong>${f.home}</strong> vs <strong>${f.away}</strong>${scoreText}${outcomeText}${status}<div class="time">${f.date}</div>${squadsInfo}${publicSquad}`;
         // Add post squad buttons if logged in as a team
-        const club = sessionStorage.getItem('currentClub');
+        const club = getCurrentClub();
         if(club && (club === f.home || club === f.away)){
             const btn = document.createElement('button');
             btn.textContent = 'Post Squad';
@@ -1016,6 +1018,16 @@ function clearCurrentClub(){
     }
 }
 
+function getCurrentClub(){
+    const sessionClub = sessionStorage.getItem('currentClub');
+    if(sessionClub) return sessionClub;
+    try{
+        return localStorage.getItem('umma.currentClub') || '';
+    } catch {
+        return '';
+    }
+}
+
 async function loginClub(){
     const team = document.getElementById('loginTeam').value.trim();
     const email = document.getElementById('loginEmail')?.value.trim().toLowerCase() || '';
@@ -1064,9 +1076,10 @@ async function loginClub(){
             // Admin login
             document.getElementById('loginModal').style.display = 'none';
             sessionStorage.setItem('adminAuth', 'true');
-            const adminTab = window.open('admin.html', '_blank');
+            const adminUrl = appUrl('admin.html');
+            const adminTab = window.open(adminUrl, '_blank');
             if(!adminTab){
-                window.location.href = 'admin.html';
+                window.location.href = adminUrl;
             }
             return;
         }
@@ -1096,7 +1109,7 @@ async function loginClub(){
         setCurrentClub(userTeam);
         document.getElementById('loginModal').style.display = 'none';
         console.log('Redirecting to club portal for team:', userTeam);
-        window.location.href = 'club.html';
+        window.location.href = appUrl('club.html');
     } else {
         await window.ummaAuth.logoutAuthUser();
         alert('Could not resolve your team. Please contact support.');
@@ -1114,22 +1127,24 @@ async function logoutClub(){
     }
     renderClubDashboard();
     renderFixtures();
+    window.location.href = appUrl('register.html#login');
 }
 
 function openClubPortal(){
-    const club = sessionStorage.getItem('currentClub');
+    const club = getCurrentClub();
     if(!club){
         alert('Login as a club first');
         return;
     }
-    const clubTab = window.open('club.html', '_blank');
+    const clubUrl = appUrl('club.html');
+    const clubTab = window.open(clubUrl, '_blank');
     if(!clubTab){
-        window.location.href = 'club.html';
+        window.location.href = clubUrl;
     }
 }
 
 async function renderClubDashboard(){
-    const club = sessionStorage.getItem('currentClub');
+    const club = getCurrentClub();
     const dash = document.getElementById('clubDashboard');
     if(!dash) return;
     if(!club){ dash.style.display='none'; return; }
@@ -1314,8 +1329,9 @@ function deleteTeam(teamName){
     accounts = accounts.filter(a=> a.team !== teamName);
     saveAccounts(accounts);
 
-    if(sessionStorage.getItem('currentClub') === teamName){
+    if(getCurrentClub() === teamName){
         sessionStorage.removeItem('currentClub');
+        try{ localStorage.removeItem('umma.currentClub'); } catch {}
     }
 
     renderRegisteredTeams();
@@ -1518,7 +1534,7 @@ function renderAdminTeams(){
 }
 
 function saveClubEdits(){
-    const club = sessionStorage.getItem('currentClub');
+    const club = getCurrentClub();
     if(!club) return alert('Not logged in');
     const coach = document.getElementById('editCoach').value.trim();
     const phone = document.getElementById('editPhone').value.trim();
@@ -1661,7 +1677,7 @@ async function registerTeam(){
     
     clearForm();
     alert('Team registered successfully! Redirecting to club portal.');
-    setTimeout(()=> window.location.href = 'club.html', 500);
+    setTimeout(()=> window.location.href = appUrl('club.html'), 500);
 }
 
 
