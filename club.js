@@ -250,12 +250,41 @@ function bindClubEvents(){
         });
     }
     if(menuBtn && menuPanel){
-        menuBtn.addEventListener("click", ()=> menuPanel.classList.toggle("open"));
+        const mobileQuery = window.matchMedia("(max-width: 780px)");
+        const syncMenuState = ()=>{
+            const isMobile = mobileQuery.matches;
+            if(!isMobile){
+                menuPanel.classList.add("open");
+                menuBtn.setAttribute("aria-expanded", "true");
+                return;
+            }
+            menuPanel.classList.remove("open");
+            menuBtn.setAttribute("aria-expanded", "false");
+        };
+        syncMenuState();
+        if(typeof mobileQuery.addEventListener === "function"){
+            mobileQuery.addEventListener("change", syncMenuState);
+        } else if(typeof mobileQuery.addListener === "function"){
+            mobileQuery.addListener(syncMenuState);
+        }
+        menuBtn.addEventListener("click", ()=>{
+            if(!mobileQuery.matches) return;
+            const opened = menuPanel.classList.toggle("open");
+            menuBtn.setAttribute("aria-expanded", opened ? "true" : "false");
+        });
+        document.addEventListener("click", (event)=>{
+            if(!mobileQuery.matches || !menuPanel.classList.contains("open")) return;
+            if(menuPanel.contains(event.target) || menuBtn.contains(event.target)) return;
+            menuPanel.classList.remove("open");
+            menuBtn.setAttribute("aria-expanded", "false");
+        });
     }
     menuLinks.forEach((btn)=>{
         btn.addEventListener("click", ()=>{
             openClubSection(btn.dataset.target);
-            if(menuPanel) menuPanel.classList.remove("open");
+            const isMobile = window.matchMedia("(max-width: 780px)").matches;
+            if(menuPanel && isMobile) menuPanel.classList.remove("open");
+            if(menuBtn && isMobile) menuBtn.setAttribute("aria-expanded", "false");
         });
     });
     if(playersBody){

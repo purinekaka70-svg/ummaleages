@@ -40,9 +40,10 @@ body{
   cursor:pointer;
   font-size:18px;
   line-height:1;
+  display:none;
 }
 .club-menu{
-  display:none;
+  display:flex;
   border-top:1px solid rgba(255,255,255,0.15);
   padding:10px 16px 12px;
   gap:8px;
@@ -137,6 +138,9 @@ input,select{
 .club-panel h3{margin-top:0}
 .payment-banner{
   border-left:4px solid var(--gold);
+  background:#fbf8ff;
+  border-radius:8px;
+  padding:12px;
 }
 .payment-banner h3{
   margin:0 0 8px;
@@ -153,8 +157,11 @@ input,select{
 }
 
 @media(max-width:780px){
+  .hamburger{display:block}
   .header-inner{align-items:flex-start;flex-wrap:wrap}
   .header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .club-menu{display:none}
+  .club-menu.open{display:flex}
   .club-menu{padding:10px 12px 12px}
   .menu-link{width:100%;text-align:left}
   .grid-2{grid-template-columns:1fr}

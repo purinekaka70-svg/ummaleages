@@ -11,7 +11,7 @@
     <header class="portal-header">
         <div class="container header-inner">
             <div class="header-left">
-                <button id="clubHamburgerBtn" class="hamburger" type="button" aria-label="Open club menu">&#9776;</button>
+                <button id="clubHamburgerBtn" class="hamburger" type="button" aria-label="Open club menu" aria-controls="clubMenuPanel" aria-expanded="false">&#9776;</button>
                 <div class="brand">Club Portal</div>
             </div>
             <div class="header-actions">
@@ -19,7 +19,7 @@
                 <button id="clubLogoutBtn" class="btn btn-outline">Logout</button>
             </div>
         </div>
-        <nav id="clubMenuPanel" class="club-menu">
+        <nav id="clubMenuPanel" class="club-menu" aria-label="Club sections">
             <button type="button" class="menu-link active" data-target="clubProfileSection">Profile</button>
             <button type="button" class="menu-link" data-target="clubPlayersSection">Players</button>
             <button type="button" class="menu-link" data-target="clubSquadSection">Squad</button>
@@ -37,16 +37,6 @@
         </section>
 
         <section id="clubPortalApp" style="display:none">
-            <section id="clubPaymentBanner" class="card payment-banner">
-                <h3>Club Weekly Maintenance Payment</h3>
-                <p id="clubPaymentNoticeText" class="muted">
-                    All registered clubs must pay weekly maintenance to keep portal access active.
-                </p>
-                <p><strong>Till Number:</strong> <span id="clubTillNumberTop">7312380</span></p>
-                <p><strong>Amount:</strong> KES 200 every Saturday</p>
-                <p id="clubPortalLockNotice" class="lock-note"></p>
-            </section>
-
             <section id="clubProfileSection" class="card club-panel">
                 <h2 id="clubNameHeading">Club</h2>
                 <div class="grid-2" style="margin-bottom:10px">
@@ -69,6 +59,15 @@
                 <div style="margin-top:10px">
                     <button id="saveClubInfoBtn" class="btn btn-primary">Save Club Info</button>
                 </div>
+                <section id="clubPaymentBanner" class="payment-banner" style="margin-top:16px">
+                    <h3>Club Weekly Maintenance Payment</h3>
+                    <p id="clubPaymentNoticeText" class="muted">
+                        All registered clubs must pay weekly maintenance to keep portal access active.
+                    </p>
+                    <p><strong>Till Number:</strong> <span id="clubTillNumberTop">7312380</span></p>
+                    <p><strong>Amount:</strong> KES 200 every Saturday</p>
+                    <p id="clubPortalLockNotice" class="lock-note"></p>
+                </section>
                 <hr class="section-divider">
                 <h3>Weekly Payment Submission</h3>
                 <p class="muted">Pay KES 200 via M-Pesa till <strong>7312380</strong> then submit your reference below.</p>
