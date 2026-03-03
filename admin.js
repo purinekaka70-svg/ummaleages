@@ -43,7 +43,7 @@ const ADMIN_EFOOTBALL_LEAGUES = [
     { id: 'ef-umma-champions', name: 'Umma Champions League', fee: 200 },
     { id: 'ef-umma-carabao', name: 'Umma Carabao Cup', fee: 200 },
     { id: 'ef-umma-kajiado', name: 'Umma Kajiado Cup', fee: 200 },
-    { id: 'ef-friendly-league', name: 'Friendly League', fee: 200 }
+    { id: 'ef-friendly-league', name: 'Friendly League', fee: 0 }
 ];
 const EF_COLLECTIONS = {
     leagues: 'efootball_leagues',
@@ -203,7 +203,7 @@ async function ensureDefaultEfootballLeaguesInFirebase(){
             setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.leagues, league.id), {
                 id: league.id,
                 name: league.name,
-                fee: Number(league.fee || 200),
+                fee: Number(league.fee ?? 200),
                 updatedAtMs: Date.now()
             }, { merge: true })
         ));
@@ -380,7 +380,7 @@ async function hydrateAdminCollectionsFromFirestore(){
             .map((league)=>({
                 id: String(league?.id || '').trim(),
                 name: collapseSpaces(league?.name || ''),
-                fee: Number(league?.fee || 200),
+                fee: Number(league?.fee ?? 200),
                 updatedAtMs: Number(league?.updatedAtMs || 0)
             }))
             .filter((league)=> league.name),
@@ -1050,7 +1050,7 @@ function getMergedEfootballLeagues(){
         map.set(normalizeKey(name), {
             id: String(league.id || slugify(name)),
             name,
-            fee: Number(league.fee || 200)
+            fee: Number(league.fee ?? 200)
         });
     });
     getJSON('efootball_leagues', []).forEach((league)=>{
@@ -1059,7 +1059,7 @@ function getMergedEfootballLeagues(){
         map.set(normalizeKey(name), {
             id: String(league?.id || slugify(name)),
             name,
-            fee: Number(league?.fee || 200)
+            fee: Number(league?.fee ?? 200)
         });
     });
     return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));

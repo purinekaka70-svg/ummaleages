@@ -5,7 +5,7 @@ const EF_LEAGUES = [
     { id: "ef-umma-champions", name: "Umma Champions League", fee: 200 },
     { id: "ef-umma-carabao", name: "Umma Carabao Cup", fee: 200 },
     { id: "ef-umma-kajiado", name: "Umma Kajiado Cup", fee: 200 },
-    { id: "ef-friendly-league", name: "Friendly League", fee: 200 }
+    { id: "ef-friendly-league", name: "Friendly League", fee: 0 }
 ];
 
 document.addEventListener("DOMContentLoaded", ()=>{ initEfootball(); });
@@ -92,9 +92,9 @@ function applyLeagueOptions(leagues){
     if(regSelect){
         const previous = regSelect.value || "";
         regSelect.innerHTML = "";
-        regSelect.appendChild(new Option("Select League (Ksh 200)", ""));
+        regSelect.appendChild(new Option("Select League", ""));
         safeLeagues.forEach((league)=>{
-            regSelect.appendChild(new Option(`${league.name} (Ksh ${Number(league.fee || 200)})`, league.name));
+            regSelect.appendChild(new Option(`${league.name} (Ksh ${Number(league.fee ?? 200)})`, league.name));
         });
         if(previous && safeLeagues.some((league)=> league.name === previous)){
             regSelect.value = previous;
@@ -203,7 +203,7 @@ async function fetchLeagues(){
     EF_LEAGUES.forEach((league)=> merged.set(String(league.name).toLowerCase(), {
         id: league.id,
         name: league.name,
-        fee: Number(league.fee || 200)
+        fee: Number(league.fee ?? 200)
     }));
 
     if(!window.ummaFire?.db){
@@ -219,7 +219,7 @@ async function fetchLeagues(){
             if(!allowed.has(key)) return;
             merged.set(key, {
                 ...league,
-                fee: Number(league.fee || 200)
+                fee: Number(league.fee ?? 200)
             });
         });
     } catch {
@@ -232,7 +232,7 @@ async function fetchLeagues(){
         return {
             id: fromMerged.id || league.id,
             name: league.name,
-            fee: Number(fromMerged.fee || league.fee || 200)
+            fee: Number(league.fee || 0)
         };
     });
 }
@@ -244,8 +244,13 @@ async function registerPlayer(){
     const email = String(document.getElementById("efEmail")?.value || "").trim().toLowerCase();
     const password = String(document.getElementById("efPassword")?.value || "");
     const league = String(document.getElementById("efLeagueSelect")?.value || "").trim();
-    if(!playerName || !phone || !mpesaRef || !email || !password || !league){
+    const fee = Number(getLeagueByName(league)?.fee || 0);
+    if(!playerName || !phone || !email || !password || !league){
         alert("Fill all registration fields.");
+        return;
+    }
+    if(fee > 0 && !mpesaRef){
+        alert("M-Pesa reference is required for paid leagues.");
         return;
     }
     if(!window.ummaAuth?.registerAuthUser){
@@ -270,16 +275,15 @@ async function registerPlayer(){
         return;
     }
     const playerId = user.uid;
-    const fee = Number(getLeagueByName(league)?.fee || 200);
     await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.players, playerId), {
         id: playerId,
         uid: playerId,
         playerName,
         phone,
         league,
-        mpesaRef,
+        mpesaRef: fee > 0 ? mpesaRef : "",
         feePaid: fee,
-        paymentStatus: "Paid",
+        paymentStatus: fee > 0 ? "Paid" : "Free",
         status: "Active",
         email,
         updatedAtMs: Date.now()
