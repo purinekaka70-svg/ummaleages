@@ -20,8 +20,8 @@ try { getAnalytics(app); } catch {}
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-function buildAppUrl(path = "register.html"){
-  const clean = String(path || "register.html").replace(/^\.?\//, "");
+function buildAppUrl(path = "index.html"){
+  const clean = String(path || "index.html").replace(/^\.?\//, "");
   return new URL(clean, window.location.href).toString();
 }
 

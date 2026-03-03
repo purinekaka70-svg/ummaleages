@@ -10,7 +10,7 @@ function appUrl(path){
     if(window.ummaNav?.buildAppUrl){
         return window.ummaNav.buildAppUrl(path);
     }
-    return new URL(String(path || "register.html"), window.location.href).toString();
+    return new URL(String(path || "index.html"), window.location.href).toString();
 }
 
 function slug(value){
@@ -112,7 +112,7 @@ function bindClubEvents(){
         logoutBtn.addEventListener("click", async ()=>{
             clearCurrentClub();
             try{ await window.ummaAuth.logoutAuthUser?.(); } catch {}
-            window.location.href = appUrl("register.html#login");
+            window.location.href = appUrl("index.html#login");
         });
     }
     if(saveInfoBtn) saveInfoBtn.addEventListener("click", saveClubInfo);
@@ -161,7 +161,7 @@ async function renderClubPortal(){
         return;
     }
     if(!currentUser){
-        window.location.href = appUrl("register.html#login");
+        window.location.href = appUrl("index.html#login");
         return;
     }
 
@@ -169,7 +169,7 @@ async function renderClubPortal(){
         const teamDoc = await findTeamForUser(currentUser.uid);
         if(!teamDoc){
             alert("Club profile not found.");
-            window.location.href = appUrl("register.html#register");
+            window.location.href = appUrl("index.html#register");
             return;
         }
         currentTeam = { id: teamDoc.id, ...teamDoc.data() };

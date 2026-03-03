@@ -45,7 +45,7 @@ function appUrl(path){
     if(window.ummaNav?.buildAppUrl){
         return window.ummaNav.buildAppUrl(path);
     }
-    return new URL(String(path || 'register.html'), window.location.href).toString();
+    return new URL(String(path || 'index.html'), window.location.href).toString();
 }
 
 async function initAdmin(){
@@ -190,7 +190,7 @@ function bindAdminActions(){
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
 
     if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
-    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('register.html'), '_blank'));
+    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('index.html'), '_blank'));
     if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
     if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
     if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', saveSemesterCalendar);

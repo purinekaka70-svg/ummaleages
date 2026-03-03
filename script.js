@@ -99,7 +99,7 @@ function appUrl(path){
     if(window.ummaNav?.buildAppUrl){
         return window.ummaNav.buildAppUrl(path);
     }
-    return new URL(String(path || 'register.html'), window.location.href).toString();
+    return new URL(String(path || 'index.html'), window.location.href).toString();
 }
 
 
@@ -1127,7 +1127,7 @@ async function logoutClub(){
     }
     renderClubDashboard();
     renderFixtures();
-    window.location.href = appUrl('register.html#login');
+    window.location.href = appUrl('index.html#login');
 }
 
 function openClubPortal(){
