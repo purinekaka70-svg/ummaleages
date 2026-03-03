@@ -1,3 +1,5 @@
+import { collection, getDocs } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', ()=>{ initAdmin(); });
 const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || window.__UMMA_DB__
@@ -129,6 +131,78 @@ function applyRemoteState(remote){
     });
 }
 
+async function fetchCollectionFromDb(name){
+    if(!window.ummaFire?.db) return [];
+    try{
+        const snap = await getDocs(collection(window.ummaFire.db, name));
+        return snap.docs.map((d)=> ({ id: d.id, ...d.data() }));
+    } catch {
+        return [];
+    }
+}
+
+function setMemoryJson(key, value){
+    const str = JSON.stringify(value || []);
+    adminMemoryStore[key] = str;
+    if(isNonPersistentKey(key)){
+        removePersistentValue(key);
+    } else {
+        writePersistentValue(key, str);
+    }
+}
+
+function normalizeTeamRow(team){
+    return {
+        ...team,
+        teamName: team.teamName || team.name || '',
+        league: team.league || '',
+        status: team.status || 'Pending Payment',
+        coachName: team.coachName || '',
+        phone: team.phone || '',
+        feePaid: Number(team.feePaid || 0),
+        paymentStatus: team.paymentStatus || ''
+    };
+}
+
+function normalizeFixtureRow(fixture){
+    return {
+        ...fixture,
+        id: fixture.id || '',
+        league: fixture.league || '',
+        home: fixture.home || '',
+        away: fixture.away || '',
+        date: fixture.date || '',
+        squads: fixture.squads && typeof fixture.squads === 'object' ? fixture.squads : {},
+        status: fixture.status || 'Scheduled'
+    };
+}
+
+function normalizeAccountRow(user){
+    return {
+        team: user.team || user.teamName || '',
+        email: user.email || '',
+        role: user.role || 'club'
+    };
+}
+
+async function hydrateAdminCollectionsFromFirestore(){
+    const [leagues, teams, fixtures, standings, players, users] = await Promise.all([
+        fetchCollectionFromDb('leagues'),
+        fetchCollectionFromDb('teams'),
+        fetchCollectionFromDb('fixtures'),
+        fetchCollectionFromDb('standings'),
+        fetchCollectionFromDb('players'),
+        fetchCollectionFromDb('users')
+    ]);
+
+    if(leagues.length) setMemoryJson('leagues', leagues);
+    setMemoryJson('teams', teams.map(normalizeTeamRow));
+    setMemoryJson('fixtures', fixtures.map(normalizeFixtureRow));
+    setMemoryJson('standings', standings);
+    setMemoryJson('players', players);
+    setMemoryJson('accounts', users.map(normalizeAccountRow));
+}
+
 async function syncAdminFromFirebase(forceReload = false){
     if(!window.ummaRemoteStore) return;
     try{
@@ -137,6 +211,7 @@ async function syncAdminFromFirebase(forceReload = false){
             : window.ummaRemoteStore.loadState;
         const remote = await loader();
         applyRemoteState(remote || {});
+        await hydrateAdminCollectionsFromFirestore();
     } catch {
         // Keep currently loaded memory state if refresh fails.
     }
