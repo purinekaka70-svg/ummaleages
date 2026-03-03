@@ -82,45 +82,68 @@ input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
 .standings td,.standings th{padding:8px;border-bottom:1px solid #eee;text-align:left}
 .standings tbody tr:nth-child(odd){background:#faf9ff}
 
-/* Match main-site login look for eFootball auth card */
-.ef-auth-card{
+/* E-Football login modal (same style pattern as main site login modal) */
+.modal{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,0.45);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:40;
+}
+.modal-content{
+  background:#fff;
+  padding:18px;
+  border-radius:8px;
+  max-width:420px;
+  width:100%;
+  box-shadow:0 12px 32px rgba(0,0,0,0.18);
+}
+.modal-close{
+  float:right;
+  font-size:20px;
+  cursor:pointer;
+}
+#efLoginModal{
+  background:radial-gradient(circle at 20% 20%, rgba(245,197,66,0.28), rgba(43,11,74,0.78));
+  backdrop-filter:blur(3px);
+}
+#efLoginModal .modal-content{
   max-width:460px;
-  margin:18px auto 14px;
   border-radius:16px;
   padding:24px;
   border:1px solid rgba(94,44,165,0.22);
   background:
     linear-gradient(#ffffff,#ffffff) padding-box,
     linear-gradient(135deg, rgba(94,44,165,0.8), rgba(245,197,66,0.75)) border-box;
-  box-shadow:0 20px 45px rgba(43,11,74,0.2);
+  box-shadow:0 20px 45px rgba(43,11,74,0.3);
   animation:efLoginPop .24s ease-out;
 }
-.ef-auth-card h2{
-  margin:0 0 8px 0;
+#efLoginModal h3{
+  margin:0 0 14px 0;
   font-size:24px;
   color:var(--purple);
 }
-.ef-auth-grid{
-  grid-template-columns:1fr;
-  gap:10px;
-}
-.ef-auth-card input{
+#efLoginModal input{
   width:100%;
+  margin:6px 0;
   padding:11px 12px;
   border:1px solid #ddd6ef;
   border-radius:10px;
   background:#fcfbff;
   outline:none;
 }
-.ef-auth-card input:focus{
+#efLoginModal input:focus{
   border-color:var(--accent);
   box-shadow:0 0 0 3px rgba(94,44,165,0.14);
 }
-#efLoginBtn{
+#efLoginModal .btn{
   border-radius:10px;
+}
+#efLoginModal .btn-primary{
   background:linear-gradient(135deg, #6331b1, #7b46cb);
 }
-
 @keyframes efLoginPop{
   from{transform:translateY(12px) scale(0.98);opacity:0}
   to{transform:translateY(0) scale(1);opacity:1}

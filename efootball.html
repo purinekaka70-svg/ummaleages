@@ -25,24 +25,12 @@
             <button type="button" class="menu-link" data-target="efFixturesSection">Fixtures</button>
             <button type="button" class="menu-link" data-target="efResultsSection">Results</button>
             <button type="button" class="menu-link" data-target="efStandingsSection">Standings</button>
-            <button type="button" class="menu-link" data-target="efLoginCard">Login</button>
+            <button type="button" id="efMenuLoginBtn" class="menu-link">Login</button>
             <button type="button" class="menu-link" data-target="efRegisterCard">Register</button>
         </nav>
     </header>
 
     <main class="container">
-        <section id="efLoginCard" class="card ef-auth-card" style="display:none">
-            <h2>E-Football Login</h2>
-            <p class="muted">Use the same credentials you created during registration.</p>
-            <div class="grid ef-auth-grid">
-                <input id="efLoginEmail" placeholder="Email" />
-                <input id="efLoginPassword" type="password" placeholder="Password" />
-            </div>
-            <div class="btns">
-                <button id="efLoginBtn" class="btn btn-primary">Login</button>
-            </div>
-        </section>
-
         <section id="efRegisterCard" class="card" style="display:none">
             <div class="ef-payment-banner">
                 <strong>Payment Notice:</strong> For paid E-Football leagues, pay via M-Pesa till <strong>7312380</strong> before registration.
@@ -115,6 +103,18 @@
             </table>
         </section>
     </main>
+
+    <div id="efLoginModal" class="modal" style="display:none">
+        <div class="modal-content">
+            <span id="efCloseLogin" class="modal-close">&times;</span>
+            <h3>E-Football Login</h3>
+            <input id="efLoginEmail" placeholder="Email">
+            <input id="efLoginPassword" placeholder="Password" type="password">
+            <div style="margin-top:8px;display:flex;gap:8px">
+                <button id="efLoginBtn" class="btn btn-primary">Login</button>
+            </div>
+        </div>
+    </div>
 
     <script type="module" src="firebase-bridge.js"></script>
     <script type="module" src="efootball.js"></script>
