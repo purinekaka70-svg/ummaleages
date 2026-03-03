@@ -372,17 +372,33 @@ async function renderLeagueViewSelect(team){
     const options = new Set();
     if(team?.league) options.add(team.league);
     const teamName = team.teamName || team.name || "";
-    const fixtures = await getTeamFixtures(teamName);
+
+    const [fixtures, leaguesSnap] = await Promise.all([
+        getTeamFixtures(teamName),
+        getDocs(collection(window.ummaFire.db, "leagues"))
+    ]);
+
     fixtures.forEach((f)=>{
-        const league = f.league;
+        const league = collapseSpaces(f.league || "");
         if(league) options.add(league);
+    });
+
+    leaguesSnap.docs.forEach((d)=>{
+        const leagueName = collapseSpaces(d.data()?.name || "");
+        if(leagueName) options.add(leagueName);
     });
 
     const leagues = [...options].sort((a,b)=> String(a).localeCompare(String(b)));
     select.innerHTML = "";
+    if(leagues.length === 0){
+        select.appendChild(new Option("No leagues found", ""));
+        currentLeagueView = "";
+        return;
+    }
     leagues.forEach((league)=> select.appendChild(new Option(league, league)));
     if(!currentLeagueView && leagues.length) currentLeagueView = leagues[0];
-    if(currentLeagueView && leagues.includes(currentLeagueView)) select.value = currentLeagueView;
+    select.value = leagues.includes(currentLeagueView) ? currentLeagueView : leagues[0];
+    currentLeagueView = select.value || "";
 }
 
 async function saveClubInfo(){
