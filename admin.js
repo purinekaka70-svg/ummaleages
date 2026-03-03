@@ -242,15 +242,41 @@ function normalizeLeagueRow(league){
     return { id: id || slugify(name), name, desc };
 }
 
+function normalizeKey(value){
+    return String(value || '').trim().toLowerCase();
+}
+
+function dedupeBy(list, keyFn){
+    const map = new Map();
+    (list || []).forEach((item)=>{
+        const key = String(keyFn(item) || '').trim();
+        if(!key) return;
+        if(!map.has(key)){
+            map.set(key, item);
+            return;
+        }
+        const prev = map.get(key);
+        // Prefer the most recently updated document when duplicates exist.
+        const prevUpdated = Number(prev?.updatedAtMs || 0);
+        const currentUpdated = Number(item?.updatedAtMs || 0);
+        if(currentUpdated >= prevUpdated){
+            map.set(key, item);
+        }
+    });
+    return [...map.values()];
+}
+
 function getMergedLeagues(){
     const map = new Map();
     ADMIN_DEFAULT_LEAGUES.forEach((league)=>{
         const row = normalizeLeagueRow(league);
-        if(row.name) map.set(row.id || row.name, row);
+        const key = normalizeKey(row.name || row.id);
+        if(key) map.set(key, row);
     });
     getJSON('leagues', []).forEach((league)=>{
         const row = normalizeLeagueRow(league);
-        if(row.name) map.set(row.id || row.name, row);
+        const key = normalizeKey(row.name || row.id);
+        if(key) map.set(key, row);
     });
     return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
 }
@@ -265,13 +291,38 @@ async function hydrateAdminCollectionsFromFirestore(){
         fetchCollectionFromDb('users')
     ]);
 
-    const normalizedLeagues = leagues.map(normalizeLeagueRow).filter((l)=> l.name);
+    const normalizedLeagues = dedupeBy(
+        leagues.map(normalizeLeagueRow).filter((l)=> l.name),
+        (l)=> normalizeKey(l.name)
+    );
     if(normalizedLeagues.length) setMemoryJson('leagues', normalizedLeagues);
-    setMemoryJson('teams', teams.map(normalizeTeamRow));
-    setMemoryJson('fixtures', fixtures.map(normalizeFixtureRow));
-    setMemoryJson('standings', standings);
-    setMemoryJson('players', players);
-    setMemoryJson('accounts', users.map(normalizeAccountRow));
+
+    const normalizedTeams = dedupeBy(
+        teams.map(normalizeTeamRow).filter((t)=> t.teamName),
+        (t)=> `${normalizeKey(t.teamName)}::${normalizeKey(t.league)}`
+    );
+    const normalizedFixtures = dedupeBy(
+        fixtures.map(normalizeFixtureRow).filter((f)=> f.league && f.home && f.away && f.date),
+        (f)=> `${normalizeKey(f.league)}::${normalizeKey(f.home)}::${normalizeKey(f.away)}::${normalizeKey(f.date)}`
+    );
+    const normalizedStandings = dedupeBy(
+        (standings || []).filter((s)=> s.team && s.league),
+        (s)=> `${normalizeKey(s.league)}::${normalizeKey(s.team)}`
+    );
+    const normalizedPlayers = dedupeBy(
+        (players || []).filter((p)=> p.name && p.team),
+        (p)=> `${normalizeKey(p.team)}::${normalizeKey(p.name)}`
+    );
+    const normalizedAccounts = dedupeBy(
+        users.map(normalizeAccountRow).filter((u)=> u.email || u.team),
+        (u)=> normalizeKey(u.email || u.team)
+    );
+
+    setMemoryJson('teams', normalizedTeams);
+    setMemoryJson('fixtures', normalizedFixtures);
+    setMemoryJson('standings', normalizedStandings);
+    setMemoryJson('players', normalizedPlayers);
+    setMemoryJson('accounts', normalizedAccounts);
 }
 
 async function syncAdminFromFirebase(forceReload = false){
