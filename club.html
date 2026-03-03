@@ -103,14 +103,12 @@
             <section id="clubSquadSection" class="card club-panel" style="display:none">
                 <h3>Squad Of The Week</h3>
                 <div class="grid-2">
-                    <select id="squadFixtureSelect"></select>
-                    <input id="squadWeekLabel" placeholder="Week Label e.g. Week 3" />
+                    <div><strong>Current Fixture:</strong> <span id="squadCurrentFixtureText">-</span></div>
+                    <div><strong>Current Week:</strong> <span id="squadCurrentWeekText">-</span></div>
                 </div>
-                <div style="margin-top:10px"><strong>First Team</strong></div>
-                <div id="squadStarterChecks" class="player-checks"></div>
+                <div class="muted" style="margin-top:8px">For each player, tick Starter or Sub.</div>
+                <div id="squadRoleChecks" class="player-checks" style="margin-top:10px"></div>
                 <div id="squadStarterCount" class="muted" style="margin-top:8px">Starters selected: 0</div>
-                <div style="margin-top:10px"><strong>Substitutions</strong></div>
-                <div id="squadSubsChecks" class="player-checks"></div>
                 <div id="squadSubsCount" class="muted" style="margin-top:8px">Subs selected: 0</div>
                 <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
                     <button id="saveSotwBtn" class="btn btn-primary">Save Squad Of The Week</button>

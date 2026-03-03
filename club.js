@@ -5,6 +5,7 @@ document.addEventListener("DOMContentLoaded", ()=>{ initClubPortal(); });
 let currentUser = null;
 let currentTeam = null;
 let currentLeagueView = "";
+let currentSquadFixtureId = "";
 let portalLockedForPayment = true;
 const WEEKLY_MAINTENANCE_TILL = "7312380";
 const WEEKLY_MAINTENANCE_AMOUNT = 200;
@@ -464,76 +465,107 @@ async function removePlayer(playerName){
 }
 
 async function renderSquadFixtureSelect(){
-    const select = document.getElementById("squadFixtureSelect");
-    if(!select) return;
+    const fixtureText = document.getElementById("squadCurrentFixtureText");
+    const weekText = document.getElementById("squadCurrentWeekText");
+    if(!fixtureText || !weekText) return;
     const clubName = getCurrentClub();
-    if(!clubName) return;
+    if(!clubName){
+        currentSquadFixtureId = "";
+        fixtureText.textContent = "-";
+        weekText.textContent = getCurrentWeekLabel();
+        return;
+    }
 
     const fixtures = (await getTeamFixtures(clubName))
         .filter((f)=> !currentLeagueView || f.league === currentLeagueView)
+        .filter((f)=> String(f.status || "").toLowerCase() !== "played")
         .sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
 
-    select.innerHTML = "";
-    select.appendChild(new Option("Select fixture", ""));
-    fixtures.forEach((f)=>{
-        const label = `${f.home} vs ${f.away} (${f.date || "No date"})`;
-        select.appendChild(new Option(label, f.id));
+    if(fixtures.length === 0){
+        currentSquadFixtureId = "";
+        fixtureText.textContent = "No planned fixture found";
+        weekText.textContent = getCurrentWeekLabel();
+        return;
+    }
+
+    const now = Date.now();
+    const withTime = fixtures.map((f)=>{
+        const ms = Date.parse(String(f.date || ""));
+        return { fixture: f, ms: Number.isNaN(ms) ? null : ms };
     });
+    const upcoming = withTime
+        .filter((row)=> row.ms === null || row.ms >= now - (6 * 60 * 60 * 1000))
+        .sort((a,b)=>{
+            const ams = a.ms ?? Number.MAX_SAFE_INTEGER;
+            const bms = b.ms ?? Number.MAX_SAFE_INTEGER;
+            return ams - bms;
+        });
+    const chosen = (upcoming[0] || withTime[0]).fixture;
+
+    currentSquadFixtureId = chosen.id || "";
+    fixtureText.textContent = `${chosen.home || "-"} vs ${chosen.away || "-"} (${chosen.date || "No date"})`;
+    weekText.textContent = chosen.date ? `Week of ${chosen.date}` : getCurrentWeekLabel();
 }
 
 async function renderSquadPlayerChecks(){
-    const starterHost = document.getElementById("squadStarterChecks");
-    const subsHost = document.getElementById("squadSubsChecks");
-    if(!starterHost || !subsHost) return;
+    const host = document.getElementById("squadRoleChecks");
+    if(!host) return;
     const clubName = getCurrentClub();
     if(!clubName) return;
 
     const players = (await getTeamPlayers(clubName))
         .filter((p)=> p.name)
         .sort((a,b)=> String(a.name).localeCompare(String(b.name)));
-    starterHost.innerHTML = "";
-    subsHost.innerHTML = "";
+    host.innerHTML = "";
     players.forEach((player)=>{
         const name = String(player.name);
         const position = collapseSpaces(player.position || "");
-        const starterRow = document.createElement("label");
-        starterRow.style.display = "block";
-        starterRow.innerHTML = `<input type="checkbox" data-role="starter" value="${name}"> ${name}${position ? ` (${position})` : ""}`;
-        starterHost.appendChild(starterRow);
-
-        const subsRow = document.createElement("label");
-        subsRow.style.display = "block";
-        subsRow.innerHTML = `<input type="checkbox" data-role="sub" value="${name}"> ${name}${position ? ` (${position})` : ""}`;
-        subsHost.appendChild(subsRow);
+        const row = document.createElement("div");
+        row.style.display = "grid";
+        row.style.gridTemplateColumns = "1fr auto auto";
+        row.style.alignItems = "center";
+        row.style.gap = "8px";
+        row.innerHTML = `
+            <span>${name}${position ? ` (${position})` : ""}</span>
+            <label><input type="checkbox" data-role="starter" data-player="${name}"> Starter</label>
+            <label><input type="checkbox" data-role="sub" data-player="${name}"> Sub</label>
+        `;
+        host.appendChild(row);
     });
     const countEl = document.getElementById("squadStarterCount");
     const subsCountEl = document.getElementById("squadSubsCount");
     if(countEl) countEl.textContent = "Starters selected: 0";
     if(subsCountEl) subsCountEl.textContent = "Subs selected: 0";
-    starterHost.onchange = ()=>{
-        const checked = starterHost.querySelectorAll('input[data-role="starter"]:checked').length;
+    host.onchange = (event)=>{
+        const changed = event.target;
+        if(!(changed instanceof HTMLInputElement)) return;
+        const player = changed.dataset.player;
+        if(player && changed.checked){
+            const oppositeRole = changed.dataset.role === "starter" ? "sub" : "starter";
+            const opposite = host.querySelector(`input[data-role="${oppositeRole}"][data-player="${player}"]`);
+            if(opposite) opposite.checked = false;
+        }
+        const checked = host.querySelectorAll('input[data-role="starter"]:checked').length;
+        const subsChecked = host.querySelectorAll('input[data-role="sub"]:checked').length;
         if(countEl) countEl.textContent = `Starters selected: ${checked}`;
-    };
-    subsHost.onchange = ()=>{
-        const checked = subsHost.querySelectorAll('input[data-role="sub"]:checked').length;
-        if(subsCountEl) subsCountEl.textContent = `Subs selected: ${checked}`;
+        if(subsCountEl) subsCountEl.textContent = `Subs selected: ${subsChecked}`;
     };
 }
 
 function getSelectedStarters(){
-    return [...document.querySelectorAll('#squadStarterChecks input[data-role="starter"]:checked')]
-        .map((el)=> el.value)
+    return [...document.querySelectorAll('#squadRoleChecks input[data-role="starter"]:checked')]
+        .map((el)=> el.dataset.player || "")
         .filter(Boolean);
 }
 
 function getSelectedSubs(){
-    return [...document.querySelectorAll('#squadSubsChecks input[data-role="sub"]:checked')]
-        .map((el)=> el.value)
+    return [...document.querySelectorAll('#squadRoleChecks input[data-role="sub"]:checked')]
+        .map((el)=> el.dataset.player || "")
         .filter(Boolean);
 }
 
 function getSelectedFixtureId(){
-    return document.getElementById("squadFixtureSelect")?.value || "";
+    return currentSquadFixtureId || "";
 }
 
 async function saveSquadOfWeek(){
@@ -541,10 +573,10 @@ async function saveSquadOfWeek(){
     const fixtureId = getSelectedFixtureId();
     const starters = getSelectedStarters();
     const subs = getSelectedSubs();
-    const weekLabel = collapseSpaces(document.getElementById("squadWeekLabel")?.value || getCurrentWeekLabel());
+    const weekLabel = collapseSpaces(document.getElementById("squadCurrentWeekText")?.textContent || getCurrentWeekLabel());
     const clubName = getCurrentClub();
 
-    if(!fixtureId) return alert("Select a fixture.");
+    if(!fixtureId) return alert("No admin-planned fixture found for your club.");
     if(starters.length === 0) return alert("Select at least one starter.");
     const overlap = starters.filter((name)=> subs.includes(name));
     if(overlap.length > 0) return alert(`These players are in both First Team and Subs: ${overlap.join(", ")}`);
