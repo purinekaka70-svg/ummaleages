@@ -54,6 +54,7 @@ async function initEfootball(){
                 document.getElementById("efMyMatchesCard").style.display = "none";
                 setRegisterPanelVisible(false);
                 await renderFixtures();
+                await renderResults();
                 await renderStandings();
                 applyMenuView(currentMenuTarget);
                 return;
@@ -66,6 +67,7 @@ async function initEfootball(){
                 document.getElementById("efMyMatchesCard").style.display = "none";
                 setRegisterPanelVisible(true);
                 await renderFixtures();
+                await renderResults();
                 await renderStandings();
                 applyMenuView(currentMenuTarget);
                 return;
@@ -77,6 +79,7 @@ async function initEfootball(){
             setRegisterPanelVisible(false);
             await renderAccount();
             await renderFixtures();
+            await renderResults();
             await renderStandings();
             await renderMyMatches();
             applyMenuView(currentMenuTarget);
@@ -140,6 +143,7 @@ function bindUi(){
     document.getElementById("efLeagueView")?.addEventListener("change", async (e)=>{
         currentLeague = e.target.value || "";
         await renderFixtures();
+        await renderResults();
         await renderStandings();
         await renderMyMatches();
     });
@@ -169,16 +173,19 @@ function applyMenuView(target){
     const registerCard = document.getElementById("efRegisterCard");
     const leagueCard = document.getElementById("efLeagueCard");
     const fixturesSection = document.getElementById("efFixturesSection");
+    const resultsSection = document.getElementById("efResultsSection");
     const standingsSection = document.getElementById("efStandingsSection");
     const myMatchesCard = document.getElementById("efMyMatchesCard");
 
     const showRegister = currentMenuTarget === "efRegisterCard";
     const showFixtures = currentMenuTarget === "efFixturesSection";
+    const showResults = currentMenuTarget === "efResultsSection";
     const showStandings = currentMenuTarget === "efStandingsSection";
 
     if(registerCard) registerCard.style.display = showRegister ? "block" : "none";
     if(leagueCard) leagueCard.style.display = showRegister ? "none" : "block";
     if(fixturesSection) fixturesSection.style.display = showFixtures ? "block" : "none";
+    if(resultsSection) resultsSection.style.display = showResults ? "block" : "none";
     if(standingsSection) standingsSection.style.display = showStandings ? "block" : "none";
     if(myMatchesCard) myMatchesCard.style.display = (showFixtures && currentPlayer) ? "block" : "none";
 }
@@ -306,6 +313,7 @@ async function registerPlayer(){
     await resolveCurrentPlayer();
     await renderAccount();
     await renderFixtures();
+    await renderResults();
     await renderStandings();
     await renderMyMatches();
 }
@@ -401,18 +409,39 @@ async function fetchFixturesByLeague(league){
 }
 
 async function renderFixtures(){
-    const body = document.getElementById("efFixturesBody");
-    if(!body || !currentLeague) return;
+    const host = document.getElementById("efFixturesList");
+    if(!host || !currentLeague) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
-    body.innerHTML = "";
+    host.innerHTML = "";
     if(fixtures.length === 0){
-        body.innerHTML = `<tr><td colspan="4" class="muted">No fixtures in ${currentLeague} yet.</td></tr>`;
+        host.innerHTML = `<li class="muted">No fixtures in ${currentLeague} yet.</li>`;
         return;
     }
     fixtures.forEach((f)=>{
-        const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${f.league}</td><td>${f.home} vs ${f.away}</td><td>${f.status || "Scheduled"}</td><td>${scoreText(f.result)}</td>`;
-        body.appendChild(tr);
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${f.league || currentLeague}</strong> - ${f.home} vs ${f.away}`;
+        host.appendChild(li);
+    });
+}
+
+async function renderResults(){
+    const host = document.getElementById("efResultsList");
+    if(!host || !currentLeague) return;
+    const fixtures = await fetchFixturesByLeague(currentLeague);
+    const played = fixtures.filter((fixture)=>{
+        const homeGoals = Number(fixture?.result?.homeGoals);
+        const awayGoals = Number(fixture?.result?.awayGoals);
+        return Number.isFinite(homeGoals) && Number.isFinite(awayGoals);
+    });
+    host.innerHTML = "";
+    if(played.length === 0){
+        host.innerHTML = `<li class="muted">No results in ${currentLeague} yet.</li>`;
+        return;
+    }
+    played.forEach((fixture)=>{
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${fixture.league || currentLeague}</strong> - ${fixture.home} ${scoreText(fixture.result)} ${fixture.away}`;
+        host.appendChild(li);
     });
 }
 
@@ -449,6 +478,7 @@ async function renderMyMatches(){
             }
             await submitFixtureResult(id, homeGoals, awayGoals);
             await renderFixtures();
+            await renderResults();
             await renderMyMatches();
             await renderStandings();
         });

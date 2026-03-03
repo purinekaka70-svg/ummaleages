@@ -22,6 +22,7 @@
         </div>
         <nav id="efMenuPanel" class="menu-panel">
             <button type="button" class="menu-link" data-target="efFixturesSection">Fixtures</button>
+            <button type="button" class="menu-link" data-target="efResultsSection">Results</button>
             <button type="button" class="menu-link" data-target="efStandingsSection">Standings</button>
             <button type="button" class="menu-link" data-target="efRegisterCard">Register / Login</button>
         </nav>
@@ -60,14 +61,12 @@
 
         <section id="efFixturesSection" class="card">
             <h3>Fixtures</h3>
-            <div class="table-wrap">
-                <table class="table">
-                    <thead>
-                        <tr><th>League</th><th>Match</th><th>Status</th><th>Result</th></tr>
-                    </thead>
-                    <tbody id="efFixturesBody"></tbody>
-                </table>
-            </div>
+            <ul id="efFixturesList" class="fixtures-list"></ul>
+        </section>
+
+        <section id="efResultsSection" class="card" style="display:none">
+            <h3>Results</h3>
+            <ul id="efResultsList" class="fixtures-list"></ul>
         </section>
 
         <section id="efStandingsSection" class="card">
