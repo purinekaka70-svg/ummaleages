@@ -83,6 +83,7 @@ body{
   border:1px solid rgba(255,255,255,0.2);
   border-radius:999px;
   padding:2px 5px;
+
   font-size:8px;
 }
 @keyframes fixtureMarquee{
@@ -160,7 +161,12 @@ body{
     flex-wrap:wrap;
     justify-content:flex-end;
   }
-  .home-highlights{grid-template-columns:1fr}
+  .home-highlights{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+  }
   #leagueSelect{min-width:180px}
 }
 
@@ -231,6 +237,26 @@ body{
   .container{padding:0 12px}
   .hero{padding:26px 0}
   .hero h1{font-size:28px}
+  .hero-inner > div:first-child{width:100%}
+  .home-highlights{
+    width:100%;
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:8px;
+    margin-top:12px;
+  }
+  .highlight-card{
+    min-height:66px;
+    padding:8px;
+  }
+  .highlight-card span{
+    font-size:10px;
+    letter-spacing:0.3px;
+  }
+  .highlight-card strong{
+    font-size:18px;
+    line-height:1.1;
+  }
   .hero-actions .btn{width:100%;margin-top:8px}
   .header-actions{gap:6px;width:100%}
   .header-actions .btn,
