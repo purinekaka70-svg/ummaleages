@@ -38,6 +38,21 @@ const ADMIN_DEFAULT_LEAGUES = [
         desc:'Free opening matches league for preparation fixtures.'
     }
 ];
+const ADMIN_EFOOTBALL_LEAGUES = [
+    { id: 'ef-umma-premier', name: 'Umma Premier League', fee: 200 },
+    { id: 'ef-umma-champions', name: 'Umma Champions League', fee: 200 },
+    { id: 'ef-umma-carabao', name: 'Umma Carabao Cup', fee: 200 },
+    { id: 'ef-umma-kajiado', name: 'Umma Kajiado Cup', fee: 200 },
+    { id: 'ef-friendly-league', name: 'Friendly League', fee: 200 }
+];
+const EF_COLLECTIONS = {
+    leagues: 'efootball_leagues',
+    fixtures: 'efootball_fixtures',
+    users: 'efootball_users',
+    players: 'efootball_players',
+    results: 'efootball_results',
+    standings: 'efootball_standings'
+};
 
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
@@ -90,6 +105,7 @@ async function initAdmin(){
     ensureAdminSeed();
     ensureSemesterCalendarSeed();
     await ensureDefaultLeaguesInFirebase();
+    await ensureDefaultEfootballLeaguesInFirebase();
     bindAdminMenu();
     bindAdminAuth();
     bindAdminActions();
@@ -172,6 +188,22 @@ async function ensureDefaultLeaguesInFirebase(){
                 id: league.id,
                 name: league.name,
                 desc: league.desc,
+                updatedAtMs: Date.now()
+            }, { merge: true })
+        ));
+    } catch {
+        // ignore seed errors
+    }
+}
+
+async function ensureDefaultEfootballLeaguesInFirebase(){
+    if(!window.ummaFire?.db) return;
+    try{
+        await Promise.all(ADMIN_EFOOTBALL_LEAGUES.map((league)=>
+            setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.leagues, league.id), {
+                id: league.id,
+                name: league.name,
+                fee: Number(league.fee || 200),
                 updatedAtMs: Date.now()
             }, { merge: true })
         ));
@@ -282,13 +314,32 @@ function getMergedLeagues(){
 }
 
 async function hydrateAdminCollectionsFromFirestore(){
-    const [leagues, teams, fixtures, standings, players, users] = await Promise.all([
+    const [
+        leagues,
+        teams,
+        fixtures,
+        standings,
+        players,
+        users,
+        efLeagues,
+        efFixtures,
+        efUsers,
+        efPlayers,
+        efResults,
+        efStandings
+    ] = await Promise.all([
         fetchCollectionFromDb('leagues'),
         fetchCollectionFromDb('teams'),
         fetchCollectionFromDb('fixtures'),
         fetchCollectionFromDb('standings'),
         fetchCollectionFromDb('players'),
-        fetchCollectionFromDb('users')
+        fetchCollectionFromDb('users'),
+        fetchCollectionFromDb(EF_COLLECTIONS.leagues),
+        fetchCollectionFromDb(EF_COLLECTIONS.fixtures),
+        fetchCollectionFromDb(EF_COLLECTIONS.users),
+        fetchCollectionFromDb(EF_COLLECTIONS.players),
+        fetchCollectionFromDb(EF_COLLECTIONS.results),
+        fetchCollectionFromDb(EF_COLLECTIONS.standings)
     ]);
 
     const normalizedLeagues = dedupeBy(
@@ -323,6 +374,91 @@ async function hydrateAdminCollectionsFromFirestore(){
     setMemoryJson('standings', normalizedStandings);
     setMemoryJson('players', normalizedPlayers);
     setMemoryJson('accounts', normalizedAccounts);
+
+    const normalizedEfLeagues = dedupeBy(
+        efLeagues
+            .map((league)=>({
+                id: String(league?.id || '').trim(),
+                name: collapseSpaces(league?.name || ''),
+                fee: Number(league?.fee || 200),
+                updatedAtMs: Number(league?.updatedAtMs || 0)
+            }))
+            .filter((league)=> league.name),
+        (league)=> normalizeKey(league.name)
+    );
+    const normalizedEfPlayers = dedupeBy(
+        efPlayers
+            .map((player)=>({
+                ...player,
+                id: String(player?.id || player?.uid || '').trim(),
+                uid: String(player?.uid || player?.id || '').trim(),
+                playerName: collapseSpaces(player?.playerName || player?.name || ''),
+                email: String(player?.email || '').trim().toLowerCase(),
+                league: collapseSpaces(player?.league || ''),
+                team: collapseSpaces(player?.team || ''),
+                paymentStatus: collapseSpaces(player?.paymentStatus || ''),
+                status: collapseSpaces(player?.status || '')
+            }))
+            .filter((player)=> player.playerName || player.email),
+        (player)=> normalizeKey(player.uid || player.email || `${player.playerName}::${player.league}`)
+    );
+    const normalizedEfFixtures = dedupeBy(
+        efFixtures
+            .map((fixture)=>({
+                ...fixture,
+                id: String(fixture?.id || '').trim(),
+                league: collapseSpaces(fixture?.league || ''),
+                home: collapseSpaces(fixture?.home || ''),
+                away: collapseSpaces(fixture?.away || ''),
+                date: String(fixture?.date || '').trim(),
+                status: collapseSpaces(fixture?.status || 'Scheduled')
+            }))
+            .filter((fixture)=> fixture.league && fixture.home && fixture.away),
+        (fixture)=> normalizeKey(fixture.id || `${fixture.league}::${fixture.home}::${fixture.away}::${fixture.date}`)
+    );
+    const normalizedEfUsers = dedupeBy(
+        efUsers
+            .map((user)=>({
+                ...user,
+                id: String(user?.id || user?.uid || '').trim(),
+                uid: String(user?.uid || user?.id || '').trim(),
+                email: String(user?.email || '').trim().toLowerCase(),
+                playerName: collapseSpaces(user?.playerName || ''),
+                league: collapseSpaces(user?.league || ''),
+                status: collapseSpaces(user?.status || '')
+            }))
+            .filter((user)=> user.uid || user.email),
+        (user)=> normalizeKey(user.uid || user.email)
+    );
+    const normalizedEfResults = dedupeBy(
+        efResults
+            .map((result)=>({
+                ...result,
+                id: String(result?.id || result?.fixtureId || '').trim(),
+                fixtureId: String(result?.fixtureId || result?.id || '').trim(),
+                league: collapseSpaces(result?.league || '')
+            }))
+            .filter((result)=> result.id || result.fixtureId),
+        (result)=> normalizeKey(result.id || result.fixtureId)
+    );
+    const normalizedEfStandings = dedupeBy(
+        efStandings
+            .map((row)=>({
+                ...row,
+                id: String(row?.id || '').trim(),
+                league: collapseSpaces(row?.league || ''),
+                player: collapseSpaces(row?.player || row?.team || '')
+            }))
+            .filter((row)=> row.league && row.player),
+        (row)=> normalizeKey(row.id || `${row.league}::${row.player}`)
+    );
+
+    setMemoryJson('efootball_leagues', normalizedEfLeagues);
+    setMemoryJson('efootball_players', normalizedEfPlayers);
+    setMemoryJson('efootball_fixtures', normalizedEfFixtures);
+    setMemoryJson('efootball_users', normalizedEfUsers);
+    setMemoryJson('efootball_results', normalizedEfResults);
+    setMemoryJson('efootball_standings', normalizedEfStandings);
 }
 
 async function syncAdminFromFirebase(forceReload = false){
@@ -417,6 +553,10 @@ function bindAdminActions(){
     const leaguesBody = document.getElementById('adminLeaguesBody');
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
+    const efLeagueFilter = document.getElementById('adminEfLeagueFilter');
+    const refreshEfootballBtn = document.getElementById('refreshEfootballBtn');
+    const autoPlanEfLeagueBtn = document.getElementById('autoPlanEfLeagueBtn');
+    const autoPlanEfAllBtn = document.getElementById('autoPlanEfAllBtn');
 
     function runButtonAction(btn, action){
         if(!btn) return Promise.resolve(action());
@@ -466,6 +606,10 @@ function bindAdminActions(){
         renderTeamTable();
         renderAllTeamsManagementTable();
     });
+    if(efLeagueFilter) efLeagueFilter.addEventListener('change', renderEfootballAdminData);
+    if(refreshEfootballBtn) refreshEfootballBtn.addEventListener('click', ()=> runButtonAction(refreshEfootballBtn, ()=> renderAllAdminData(true)));
+    if(autoPlanEfLeagueBtn) autoPlanEfLeagueBtn.addEventListener('click', ()=> runButtonAction(autoPlanEfLeagueBtn, autoPlanSelectedEfootballLeague));
+    if(autoPlanEfAllBtn) autoPlanEfAllBtn.addEventListener('click', ()=> runButtonAction(autoPlanEfAllBtn, autoPlanAllEfootballLeagues));
 
     if(teamsBody){
         teamsBody.addEventListener('click', (e)=>{
@@ -585,7 +729,7 @@ function hydrateAdminView(){
 }
 
 function openAdminSection(sectionId){
-    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection'];
+    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection', 'efootballSection'];
     sectionIds.forEach((id)=>{
         const section = document.getElementById(id);
         if(section){
@@ -720,9 +864,11 @@ async function renderAllAdminData(forceReload = false){
         renderStats();
         renderLeagueTable();
         populateTeamLeagueFilter();
+        populateEfLeagueFilter();
         renderTeamsByLeagueDirectory();
         renderAllTeamsManagementTable();
         renderTeamTable();
+        renderEfootballAdminData();
         renderFixtureTable();
         populateFixtureInputs();
         renderSemesterCalendarInputs();
@@ -894,6 +1040,285 @@ function setTeamLeagueFilter(league){
     }
     renderTeamTable();
     renderAllTeamsManagementTable();
+}
+
+function getMergedEfootballLeagues(){
+    const map = new Map();
+    ADMIN_EFOOTBALL_LEAGUES.forEach((league)=>{
+        const name = collapseSpaces(league.name);
+        if(!name) return;
+        map.set(normalizeKey(name), {
+            id: String(league.id || slugify(name)),
+            name,
+            fee: Number(league.fee || 200)
+        });
+    });
+    getJSON('efootball_leagues', []).forEach((league)=>{
+        const name = collapseSpaces(league?.name || '');
+        if(!name) return;
+        map.set(normalizeKey(name), {
+            id: String(league?.id || slugify(name)),
+            name,
+            fee: Number(league?.fee || 200)
+        });
+    });
+    return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+}
+
+function populateEfLeagueFilter(){
+    const sel = document.getElementById('adminEfLeagueFilter');
+    if(!sel) return;
+    const previous = sel.value || '';
+    const leagueSet = new Set(getMergedEfootballLeagues().map((l)=> l.name));
+    getJSON('efootball_players', []).forEach((player)=>{
+        const league = collapseSpaces(player?.league || '');
+        if(league) leagueSet.add(league);
+    });
+    getJSON('efootball_fixtures', []).forEach((fixture)=>{
+        const league = collapseSpaces(fixture?.league || '');
+        if(league) leagueSet.add(league);
+    });
+    getJSON('efootball_standings', []).forEach((row)=>{
+        const league = collapseSpaces(row?.league || '');
+        if(league) leagueSet.add(league);
+    });
+    const leagues = [...leagueSet].filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    sel.innerHTML = '';
+    sel.appendChild(new Option('Select league', ''));
+    sel.appendChild(new Option('All Leagues', '__all__'));
+    leagues.forEach((league)=> sel.appendChild(new Option(league, league)));
+    if(leagues.includes(previous) || previous === '__all__' || previous === ''){
+        sel.value = previous;
+    } else {
+        sel.value = '';
+    }
+}
+
+function getSelectedEfLeague(){
+    return document.getElementById('adminEfLeagueFilter')?.value || '';
+}
+
+function getEfLeagueHintText(selectedLeague){
+    if(!selectedLeague) return 'Select a league to view players, standings, and fixtures.';
+    if(selectedLeague === '__all__') return 'Showing all E-Football leagues.';
+    return `Showing E-Football data for ${selectedLeague}.`;
+}
+
+function renderEfootballAdminData(){
+    const hint = document.getElementById('adminEfHint');
+    const selectedLeague = getSelectedEfLeague();
+    if(hint) hint.textContent = getEfLeagueHintText(selectedLeague);
+    renderEfPlayersTable(selectedLeague);
+    renderEfStandingsTable(selectedLeague);
+    renderEfFixturesTable(selectedLeague);
+}
+
+function leagueMatchesFilter(selectedLeague, rowLeague){
+    if(!selectedLeague || selectedLeague === '__all__') return true;
+    return collapseSpaces(selectedLeague) === collapseSpaces(rowLeague || '');
+}
+
+function renderEfPlayersTable(selectedLeague = getSelectedEfLeague()){
+    const body = document.getElementById('adminEfPlayersBody');
+    if(!body) return;
+    const players = getJSON('efootball_players', [])
+        .filter((player)=> leagueMatchesFilter(selectedLeague, player?.league))
+        .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.playerName || '').localeCompare(String(b.playerName || '')));
+    body.innerHTML = '';
+    if(!selectedLeague){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" class="muted">Select a league to view registered E-Football players.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    if(players.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="6" class="muted">No E-Football players found.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    players.forEach((player)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHTML(player.playerName || '-')}</td>
+            <td>${escapeHTML(player.email || '-')}</td>
+            <td>${escapeHTML(player.team || '-')}</td>
+            <td>${escapeHTML(player.league || '-')}</td>
+            <td>${escapeHTML(player.paymentStatus || '-')}</td>
+            <td>${escapeHTML(player.status || '-')}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+function renderEfStandingsTable(selectedLeague = getSelectedEfLeague()){
+    const body = document.getElementById('adminEfStandingsBody');
+    if(!body) return;
+    const rows = getJSON('efootball_standings', [])
+        .filter((row)=> leagueMatchesFilter(selectedLeague, row?.league))
+        .sort((a,b)=>{
+            if(String(a.league || '') !== String(b.league || '')){
+                return String(a.league || '').localeCompare(String(b.league || ''));
+            }
+            const ptsDelta = Number(b.pts || 0) - Number(a.pts || 0);
+            if(ptsDelta !== 0) return ptsDelta;
+            const gdDelta = Number(b.gd || 0) - Number(a.gd || 0);
+            if(gdDelta !== 0) return gdDelta;
+            return String(a.player || '').localeCompare(String(b.player || ''));
+        });
+    body.innerHTML = '';
+    if(!selectedLeague){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" class="muted">Select a league to view E-Football standings.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    if(rows.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="8" class="muted">No standings found for selected league.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    rows.forEach((row)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHTML(row.player || '-')}</td>
+            <td>${escapeHTML(row.league || '-')}</td>
+            <td>${Number(row.p || 0)}</td>
+            <td>${Number(row.w || 0)}</td>
+            <td>${Number(row.d || 0)}</td>
+            <td>${Number(row.l || 0)}</td>
+            <td>${Number(row.gd || 0)}</td>
+            <td>${Number(row.pts || 0)}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+function formatFixtureScore(result){
+    const homeGoals = Number(result?.homeGoals);
+    const awayGoals = Number(result?.awayGoals);
+    if(Number.isFinite(homeGoals) && Number.isFinite(awayGoals)){
+        return `${homeGoals} - ${awayGoals}`;
+    }
+    return '-';
+}
+
+function renderEfFixturesTable(selectedLeague = getSelectedEfLeague()){
+    const body = document.getElementById('adminEfFixturesBody');
+    if(!body) return;
+    const rows = getJSON('efootball_fixtures', [])
+        .filter((fixture)=> leagueMatchesFilter(selectedLeague, fixture?.league))
+        .sort((a,b)=> String(a.date || '').localeCompare(String(b.date || '')));
+    body.innerHTML = '';
+    if(!selectedLeague){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" class="muted">Select a league to view E-Football fixtures.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    if(rows.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" class="muted">No fixtures found for selected league.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    rows.forEach((fixture)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHTML(fixture.league || '-')}</td>
+            <td>${escapeHTML(fixture.home || '-')} vs ${escapeHTML(fixture.away || '-')}</td>
+            <td>${escapeHTML(fixture.date || '-')}</td>
+            <td>${escapeHTML(fixture.status || 'Scheduled')}</td>
+            <td>${escapeHTML(formatFixtureScore(fixture.result))}</td>
+        `;
+        body.appendChild(tr);
+    });
+}
+
+function getEfootballPlayersByLeague(leagueName){
+    return dedupeBy(
+        getJSON('efootball_players', [])
+            .filter((player)=> collapseSpaces(player?.league || '') === collapseSpaces(leagueName))
+            .filter((player)=> collapseSpaces(player?.playerName || ''))
+            .filter((player)=> collapseSpaces(player?.status || 'Active').toLowerCase() !== 'withdrawn'),
+        (player)=> normalizeKey(player.playerName)
+    );
+}
+
+async function autoPlanSelectedEfootballLeague(){
+    const selectedLeague = getSelectedEfLeague();
+    if(!selectedLeague || selectedLeague === '__all__'){
+        alert('Select one E-Football league first.');
+        return;
+    }
+    const created = await autoPlanEfootballLeagueFixtures(selectedLeague);
+    if(created <= 0){
+        alert(`No new fixtures planned for ${selectedLeague}.`);
+    } else {
+        alert(`Planned ${created} new E-Football fixtures for ${selectedLeague}.`);
+    }
+    await renderAllAdminData(true);
+}
+
+async function autoPlanAllEfootballLeagues(){
+    const leagues = getMergedEfootballLeagues().map((league)=> league.name);
+    if(leagues.length === 0){
+        alert('No E-Football leagues found.');
+        return;
+    }
+    let createdTotal = 0;
+    for(const leagueName of leagues){
+        // eslint-disable-next-line no-await-in-loop
+        createdTotal += await autoPlanEfootballLeagueFixtures(leagueName);
+    }
+    alert(createdTotal > 0
+        ? `Planned ${createdTotal} new E-Football fixtures across all leagues.`
+        : 'No new E-Football fixtures were needed.');
+    await renderAllAdminData(true);
+}
+
+async function autoPlanEfootballLeagueFixtures(leagueName){
+    const players = getEfootballPlayersByLeague(leagueName).map((player)=> player.playerName);
+    if(players.length < 2){
+        return 0;
+    }
+    const existing = getJSON('efootball_fixtures', []).filter((fixture)=> collapseSpaces(fixture?.league || '') === collapseSpaces(leagueName));
+    const existingPairSet = new Set(existing.map((fixture)=> pairKey(fixture.home, fixture.away)));
+    const pairs = buildPairs(players);
+    const toCreate = pairs.filter((pair)=> !existingPairSet.has(pairKey(pair.home, pair.away)));
+    if(toCreate.length === 0){
+        return 0;
+    }
+
+    const nowMs = Date.now();
+    const newRows = toCreate.map((pair, idx)=>{
+        const fixtureDate = new Date(nowMs + (idx + 1) * 86400000);
+        const id = `ef-${slugify(leagueName)}-${slugify(pair.home)}-${slugify(pair.away)}-${nowMs + idx}`;
+        return {
+            id,
+            league: leagueName,
+            home: pair.home,
+            away: pair.away,
+            date: `${formatYmd(fixtureDate)} 20:00`,
+            status: 'Scheduled',
+            updatedAtMs: Date.now()
+        };
+    });
+
+    setJSON('efootball_fixtures', [...existing, ...newRows, ...getJSON('efootball_fixtures', []).filter((fixture)=> collapseSpaces(fixture?.league || '') !== collapseSpaces(leagueName))]);
+
+    if(window.ummaFire?.db){
+        await Promise.all(newRows.map((fixture)=>
+            setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.fixtures, fixture.id), fixture, { merge: true })
+        ));
+    }
+    return newRows.length;
+}
+
+function pairKey(home, away){
+    const teams = [collapseSpaces(home || ''), collapseSpaces(away || '')].sort((a,b)=> a.localeCompare(b));
+    return normalizeKey(`${teams[0]}::${teams[1]}`);
 }
 
 function renderTeamTable(){

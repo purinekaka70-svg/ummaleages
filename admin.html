@@ -22,6 +22,7 @@
             <button type="button" class="menu-link" data-target="fixturesSection">Fixtures</button>
             <button type="button" class="menu-link" data-target="resultsSection">Results</button>
             <button type="button" class="menu-link" data-target="teamsSection">Teams</button>
+            <button type="button" class="menu-link" data-target="efootballSection">E-Football</button>
         </nav>
     </header>
 
@@ -167,6 +168,48 @@
                         <tr><th>Team</th><th>League</th><th>Semester</th><th>M-Pesa Ref</th><th>Coach</th><th>Phone</th><th>Payment</th><th>Status</th><th>Actions</th></tr>
                     </thead>
                     <tbody id="adminTeamsBody"></tbody>
+                </table>
+            </section>
+
+            <section id="efootballSection" class="card">
+                <h3>E-Football Admin</h3>
+                <div class="grid-3">
+                    <div>
+                        <label for="adminEfLeagueFilter"><strong>League Filter:</strong></label>
+                        <select id="adminEfLeagueFilter"></select>
+                    </div>
+                    <div style="align-self:end">
+                        <button id="refreshEfootballBtn" class="btn">Refresh E-Football</button>
+                    </div>
+                    <div style="align-self:end;display:flex;gap:8px;flex-wrap:wrap">
+                        <button id="autoPlanEfLeagueBtn" class="btn btn-primary">Auto Plan Selected League</button>
+                        <button id="autoPlanEfAllBtn" class="btn">Auto Plan All Leagues</button>
+                    </div>
+                </div>
+                <div id="adminEfHint" class="muted" style="margin-top:8px">Select a league to view players, standings, and fixtures.</div>
+
+                <h4 style="margin:12px 0 6px">Players</h4>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>Player</th><th>Email</th><th>Team</th><th>League</th><th>Payment</th><th>Status</th></tr>
+                    </thead>
+                    <tbody id="adminEfPlayersBody"></tbody>
+                </table>
+
+                <h4 style="margin:12px 0 6px">Standings</h4>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>Player</th><th>League</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>PTS</th></tr>
+                    </thead>
+                    <tbody id="adminEfStandingsBody"></tbody>
+                </table>
+
+                <h4 style="margin:12px 0 6px">Fixtures</h4>
+                <table class="simple-table">
+                    <thead>
+                        <tr><th>League</th><th>Match</th><th>Date</th><th>Status</th><th>Score</th></tr>
+                    </thead>
+                    <tbody id="adminEfFixturesBody"></tbody>
                 </table>
             </section>
 
