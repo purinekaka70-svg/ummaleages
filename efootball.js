@@ -90,6 +90,8 @@ async function initEfootball(){
 function applyLeagueOptions(leagues){
     const regSelect = document.getElementById("efLeagueSelect");
     const viewSelect = document.getElementById("efLeagueView");
+    const fixturesSelect = document.getElementById("efFixturesLeagueView");
+    const resultsSelect = document.getElementById("efResultsLeagueView");
     const safeLeagues = Array.isArray(leagues) ? leagues : [];
 
     if(regSelect){
@@ -116,6 +118,42 @@ function applyLeagueOptions(leagues){
             currentLeague = safeLeagues[0].name;
         }
     }
+    if(fixturesSelect){
+        const previous = fixturesSelect.value || "";
+        fixturesSelect.innerHTML = "";
+        safeLeagues.forEach((league)=> fixturesSelect.appendChild(new Option(league.name, league.name)));
+        if(previous && safeLeagues.some((league)=> league.name === previous)){
+            fixturesSelect.value = previous;
+        } else if(currentLeague && safeLeagues.some((league)=> league.name === currentLeague)){
+            fixturesSelect.value = currentLeague;
+        } else if(safeLeagues.length){
+            fixturesSelect.value = safeLeagues[0].name;
+        }
+    }
+    if(resultsSelect){
+        const previous = resultsSelect.value || "";
+        resultsSelect.innerHTML = "";
+        safeLeagues.forEach((league)=> resultsSelect.appendChild(new Option(league.name, league.name)));
+        if(previous && safeLeagues.some((league)=> league.name === previous)){
+            resultsSelect.value = previous;
+        } else if(currentLeague && safeLeagues.some((league)=> league.name === currentLeague)){
+            resultsSelect.value = currentLeague;
+        } else if(safeLeagues.length){
+            resultsSelect.value = safeLeagues[0].name;
+        }
+    }
+}
+
+function syncLeagueSelectors(league){
+    const value = String(league || "");
+    const ids = ["efLeagueView", "efFixturesLeagueView", "efResultsLeagueView"];
+    ids.forEach((id)=>{
+        const sel = document.getElementById(id);
+        if(!sel) return;
+        if([...sel.options].some((opt)=> opt.value === value)){
+            sel.value = value;
+        }
+    });
 }
 
 function bindUi(){
@@ -140,13 +178,17 @@ function bindUi(){
     document.getElementById("efLogoutBtn")?.addEventListener("click", async ()=>{
         try{ await window.ummaAuth.logoutAuthUser(); } catch {}
     });
-    document.getElementById("efLeagueView")?.addEventListener("change", async (e)=>{
-        currentLeague = e.target.value || "";
+    async function onLeagueChange(value){
+        currentLeague = String(value || "");
+        syncLeagueSelectors(currentLeague);
         await renderFixtures();
         await renderResults();
         await renderStandings();
         await renderMyMatches();
-    });
+    }
+    document.getElementById("efLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
+    document.getElementById("efFixturesLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
+    document.getElementById("efResultsLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     applyMenuView(currentMenuTarget);
 }
 
@@ -339,10 +381,7 @@ async function resolveCurrentPlayer(){
         currentPlayer = byUid.data();
         if(currentPlayer?.league){
             currentLeague = currentPlayer.league;
-            const select = document.getElementById("efLeagueView");
-            if(select && [...select.options].some((o)=> o.value === currentLeague)){
-                select.value = currentLeague;
-            }
+            syncLeagueSelectors(currentLeague);
         }
         return currentPlayer;
     }
