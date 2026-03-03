@@ -152,7 +152,8 @@ async function mirrorCollectionsFromState(){
 
     // --- Teams ---
     await Promise.all(teams.map(t=>{
-      const teamId = slug(t.teamName);
+      // Prefer auth UID-based IDs to avoid duplicate team docs.
+      const teamId = String(t.ownerUid || t.id || slug(t.teamName));
       const leagueId = slug(t.league);
       return setDoc(doc(db,"teams",teamId),{
         id: teamId,
@@ -185,9 +186,11 @@ async function mirrorCollectionsFromState(){
 
     // --- Accounts/Users ---
     await Promise.all(accounts.map(a=>{
-      const userId = slug(a.email||a.team||"user");
+      // Prefer stable UID/id when available; fall back to email/team slug.
+      const userId = String(a.uid || a.id || a.ownerUid || slug(a.email||a.team||"user"));
       return setDoc(doc(db,"users",userId),{
         id: userId,
+        uid: String(a.uid || a.id || ""),
         email: String(a.email||""),
         role: String(a.role||"team"),
         team: String(a.team||""),
