@@ -1046,6 +1046,18 @@ async function loginClub(){
         alert('Invalid email or password');
         return;
     }
+
+    // Route admin immediately after successful Firebase auth.
+    if(email === getDefaultAdminEmail()){
+        document.getElementById('loginModal').style.display = 'none';
+        sessionStorage.setItem('adminAuth', 'true');
+        const adminUrl = appUrl('admin.html');
+        const adminTab = window.open(adminUrl, '_blank');
+        if(!adminTab){
+            window.location.href = adminUrl;
+        }
+        return;
+    }
     
     // Get the authenticated user's UID and resolve their team from Firestore
     let userTeam = null;
