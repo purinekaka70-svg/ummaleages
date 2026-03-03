@@ -110,14 +110,17 @@ function clearCurrentClub(){
 function openClubSection(sectionId){
     if(portalLockedForPayment && sectionId !== "clubProfileSection"){
         setText("clubPortalLockNotice", `Portal locked: pay KES ${WEEKLY_MAINTENANCE_AMOUNT} and submit M-Pesa reference for this week to continue.`);
-        alert("Portal locked for weekly maintenance payment. Submit M-Pesa reference first.");
         sectionId = "clubProfileSection";
     }
     const sections = document.querySelectorAll(".club-panel");
     const links = document.querySelectorAll(".menu-link[data-target]");
+    const paymentBanner = document.getElementById("clubPaymentBanner");
     sections.forEach((section)=>{
         section.style.display = section.id === sectionId ? "block" : "none";
     });
+    if(paymentBanner){
+        paymentBanner.style.display = sectionId === "clubProfileSection" ? "block" : "none";
+    }
     links.forEach((btn)=>{
         btn.classList.toggle("active", btn.dataset.target === sectionId);
     });
@@ -167,8 +170,9 @@ function applyPortalLockState(){
     const links = document.querySelectorAll(".menu-link[data-target]");
     links.forEach((btn)=>{
         const isProfile = btn.dataset.target === "clubProfileSection";
-        btn.disabled = portalLockedForPayment && !isProfile;
-        btn.title = portalLockedForPayment && !isProfile ? "Complete weekly payment to unlock this section." : "";
+        btn.title = portalLockedForPayment && !isProfile
+            ? "Complete weekly payment to unlock this section."
+            : "";
     });
 }
 
