@@ -129,6 +129,19 @@ function applyRemoteState(remote){
     });
 }
 
+async function syncAdminFromFirebase(forceReload = false){
+    if(!window.ummaRemoteStore) return;
+    try{
+        const loader = forceReload && window.ummaRemoteStore.reloadState
+            ? window.ummaRemoteStore.reloadState
+            : window.ummaRemoteStore.loadState;
+        const remote = await loader();
+        applyRemoteState(remote || {});
+    } catch {
+        // Keep currently loaded memory state if refresh fails.
+    }
+}
+
 function startRemoteSubscription(){
     if(!window.ummaRemoteStore?.subscribeState) return;
     window.ummaRemoteStore.subscribeState((remote)=>{
@@ -189,7 +202,7 @@ function bindAdminActions(){
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
 
-    if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
+    if(refreshBtn) refreshBtn.addEventListener('click', ()=> renderAllAdminData(true));
     if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('index.html'), '_blank'));
     if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
     if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
@@ -447,7 +460,8 @@ async function adminLogout(){
     hydrateAdminView();
 }
 
-function renderAllAdminData(){
+async function renderAllAdminData(forceReload = false){
+    await syncAdminFromFirebase(forceReload);
     renderStats();
     renderLeagueTable();
     populateTeamLeagueFilter();

@@ -60,6 +60,11 @@ async function loadState(){
   return {...cache};
 }
 
+async function reloadState(){
+  cache = null;
+  return loadState();
+}
+
 // Save/update key in state
 function saveKey(key, value){
   if(!cache) cache = {};
@@ -228,6 +233,7 @@ function getAuthUser(){ return auth.currentUser || null; }
 // ---------------- Expose API ----------------
 window.ummaRemoteStore = {
   loadState,
+  reloadState,
   saveKey,
   deleteKey,
   flushNow,
