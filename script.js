@@ -29,6 +29,7 @@ const collectionCache = new Map();
 const collectionInFlight = new Map();
 const directFirestoreUnsubs = [];
 let userUiRefreshTimer = null;
+const ESSENTIAL_COLLECTIONS = ['leagues', 'teams', 'fixtures', 'standings', 'players', 'users'];
 
 function invalidateCollectionCache(name){
     if(name){
@@ -60,13 +61,33 @@ async function fetchCollection(name, options = {}){
             return data;
         } catch(err){
             console.error('fetchCollection', key, err);
-            return [];
+            const stale = collectionCache.get(key);
+            if(stale && Array.isArray(stale.data) && stale.data.length){
+                return stale.data;
+            }
+            const fallback = readMemoryJson(key, []);
+            return Array.isArray(fallback) ? fallback : [];
         } finally {
             collectionInFlight.delete(key);
         }
     })();
     collectionInFlight.set(key, fetchPromise);
     return fetchPromise;
+}
+
+function readMemoryJson(key, fallback){
+    try{
+        const raw = storageGet(key);
+        if(!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+    } catch {
+        return fallback;
+    }
+}
+
+async function warmEssentialCollections(){
+    await Promise.all(ESSENTIAL_COLLECTIONS.map((name)=> fetchCollection(name, { force: true })));
 }
 
 function setCollectionCache(name, data, ttlMs = COLLECTION_CACHE_TTL_MS){
@@ -104,6 +125,9 @@ async function getSemesterCalendar(options = {}){
             semesterCalendarCache.expiresAt = Date.now() + COLLECTION_CACHE_TTL_MS;
             return calendar;
         } catch {
+            if(semesterCalendarCache.value){
+                return semesterCalendarCache.value;
+            }
             return null;
         } finally {
             semesterCalendarCache.inFlight = null;
@@ -321,6 +345,7 @@ async function init(){
     await ensureSampleData();
     await ensureMissingAccountsAndTeams();
     await syncStandingsFromPlayedFixtures();
+    await warmEssentialCollections();
     await renderLeagueSelect();
     await populateRegisterLeagueSelect();
     updateRegistrationPaymentUI();
