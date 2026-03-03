@@ -1,58 +1,9 @@
-import { collection, getDocs, doc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
-
 document.addEventListener('DOMContentLoaded', ()=>{ initAdmin(); });
 const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || window.__UMMA_DB__
     || (window.__UMMA_DB__ = {});
 const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
-let adminRefreshTimer = null;
-const adminWindowFocusRefresh = ()=>{ renderAllAdminData(true); };
-let adminRenderInFlight = false;
-let adminRenderQueued = false;
-let adminRenderForceQueued = false;
-const ADMIN_DEFAULT_LEAGUES = [
-    {
-        id:'umma-premier',
-        name:'Umma Premier League',
-        desc:'Semester format: round-robin league played over semester weeks, and table ranking decides the winner.'
-    },
-    {
-        id:'umma-champ',
-        name:'Umma Champions League',
-        desc:'Semester format: league fixtures through semester weeks with top clubs progressing to semester-end playoffs.'
-    },
-    {
-        id:'umma-carabao',
-        name:'Umma Carabao Cup',
-        desc:'Semester knockout cup. Single-elimination matches are scheduled week by week until the cup final.'
-    },
-    {
-        id:'umma-kajiado',
-        name:'Umma Kajiado Cup',
-        desc:'Semester regional cup with structured rounds and final ranking/playoff.'
-    },
-    {
-        id:'friendly-league',
-        name:'Friendly League',
-        desc:'Free opening matches league for preparation fixtures.'
-    }
-];
-const ADMIN_EFOOTBALL_LEAGUES = [
-    { id: 'ef-umma-premier', name: 'Umma Premier League', fee: 200 },
-    { id: 'ef-umma-champions', name: 'Umma Champions League', fee: 200 },
-    { id: 'ef-umma-carabao', name: 'Umma Carabao Cup', fee: 200 },
-    { id: 'ef-umma-kajiado', name: 'Umma Kajiado Cup', fee: 200 },
-    { id: 'ef-friendly-league', name: 'Friendly League', fee: 0 }
-];
-const EF_COLLECTIONS = {
-    leagues: 'efootball_leagues',
-    fixtures: 'efootball_fixtures',
-    users: 'efootball_users',
-    players: 'efootball_players',
-    results: 'efootball_results',
-    standings: 'efootball_standings'
-};
 
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
@@ -90,13 +41,6 @@ function syncMemoryStoreToPersistent(){
     });
 }
 
-function appUrl(path){
-    if(window.ummaNav?.buildAppUrl){
-        return window.ummaNav.buildAppUrl(path);
-    }
-    return new URL(String(path || 'index.html'), window.location.href).toString();
-}
-
 async function initAdmin(){
     clearLegacyLocalTeamData();
     syncMemoryStoreToPersistent();
@@ -104,8 +48,6 @@ async function initAdmin(){
     await ensureAdminAuthSeed();
     ensureAdminSeed();
     ensureSemesterCalendarSeed();
-    await ensureDefaultLeaguesInFirebase();
-    await ensureDefaultEfootballLeaguesInFirebase();
     bindAdminMenu();
     bindAdminAuth();
     bindAdminActions();
@@ -180,321 +122,6 @@ function applyRemoteState(remote){
     });
 }
 
-async function ensureDefaultLeaguesInFirebase(){
-    if(!window.ummaFire?.db) return;
-    try{
-        await Promise.all(ADMIN_DEFAULT_LEAGUES.map((league)=>
-            setDoc(doc(window.ummaFire.db, 'leagues', league.id), {
-                id: league.id,
-                name: league.name,
-                desc: league.desc,
-                updatedAtMs: Date.now()
-            }, { merge: true })
-        ));
-    } catch {
-        // ignore seed errors
-    }
-}
-
-async function ensureDefaultEfootballLeaguesInFirebase(){
-    if(!window.ummaFire?.db) return;
-    try{
-        await Promise.all(ADMIN_EFOOTBALL_LEAGUES.map((league)=>
-            setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.leagues, league.id), {
-                id: league.id,
-                name: league.name,
-                fee: Number(league.fee ?? 200),
-                updatedAtMs: Date.now()
-            }, { merge: true })
-        ));
-    } catch {
-        // ignore seed errors
-    }
-}
-
-async function fetchCollectionFromDb(name){
-    if(!window.ummaFire?.db) return [];
-    try{
-        const snap = await getDocs(collection(window.ummaFire.db, name));
-        return snap.docs.map((d)=> ({ ...d.data(), id: d.id }));
-    } catch {
-        return [];
-    }
-}
-
-function setMemoryJson(key, value){
-    const str = JSON.stringify(value || []);
-    adminMemoryStore[key] = str;
-    if(isNonPersistentKey(key)){
-        removePersistentValue(key);
-    } else {
-        writePersistentValue(key, str);
-    }
-}
-
-function normalizeTeamRow(team){
-    return {
-        ...team,
-        teamName: team.teamName || team.name || '',
-        league: team.league || '',
-        status: team.status || 'Pending Payment',
-        coachName: team.coachName || '',
-        phone: team.phone || '',
-        feePaid: Number(team.feePaid || 0),
-        paymentStatus: team.paymentStatus || '',
-        maintenancePayment: team.maintenancePayment && typeof team.maintenancePayment === 'object' ? team.maintenancePayment : null,
-        maintenancePaymentHistory: Array.isArray(team.maintenancePaymentHistory) ? team.maintenancePaymentHistory : []
-    };
-}
-
-function normalizeFixtureRow(fixture){
-    return {
-        ...fixture,
-        id: fixture.id || '',
-        league: fixture.league || '',
-        home: fixture.home || '',
-        away: fixture.away || '',
-        date: fixture.date || '',
-        squads: fixture.squads && typeof fixture.squads === 'object' ? fixture.squads : {},
-        status: fixture.status || 'Scheduled'
-    };
-}
-
-function normalizeAccountRow(user){
-    return {
-        team: user.team || user.teamName || '',
-        email: user.email || '',
-        role: user.role || 'club'
-    };
-}
-
-function normalizeLeagueRow(league){
-    const fallback = ADMIN_DEFAULT_LEAGUES.find((l)=> l.id === league?.id || l.name === league?.name);
-    const id = String(league?.id || fallback?.id || '').trim();
-    const name = String(league?.name || fallback?.name || id).trim();
-    const desc = String(league?.desc || fallback?.desc || 'Semester competition league').trim();
-    return { id: id || slugify(name), name, desc };
-}
-
-function normalizeKey(value){
-    return String(value || '').trim().toLowerCase();
-}
-
-function dedupeBy(list, keyFn){
-    const map = new Map();
-    (list || []).forEach((item)=>{
-        const key = String(keyFn(item) || '').trim();
-        if(!key) return;
-        if(!map.has(key)){
-            map.set(key, item);
-            return;
-        }
-        const prev = map.get(key);
-        // Prefer the most recently updated document when duplicates exist.
-        const prevUpdated = Number(prev?.updatedAtMs || 0);
-        const currentUpdated = Number(item?.updatedAtMs || 0);
-        if(currentUpdated >= prevUpdated){
-            map.set(key, item);
-        }
-    });
-    return [...map.values()];
-}
-
-function getMergedLeagues(){
-    const map = new Map();
-    ADMIN_DEFAULT_LEAGUES.forEach((league)=>{
-        const row = normalizeLeagueRow(league);
-        const key = normalizeKey(row.name || row.id);
-        if(key) map.set(key, row);
-    });
-    getJSON('leagues', []).forEach((league)=>{
-        const row = normalizeLeagueRow(league);
-        const key = normalizeKey(row.name || row.id);
-        if(key) map.set(key, row);
-    });
-    return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
-}
-
-async function hydrateAdminCollectionsFromFirestore(){
-    const [
-        leagues,
-        teams,
-        fixtures,
-        standings,
-        players,
-        users,
-        efLeagues,
-        efFixtures,
-        efUsers,
-        efPlayers,
-        efResults,
-        efStandings
-    ] = await Promise.all([
-        fetchCollectionFromDb('leagues'),
-        fetchCollectionFromDb('teams'),
-        fetchCollectionFromDb('fixtures'),
-        fetchCollectionFromDb('standings'),
-        fetchCollectionFromDb('players'),
-        fetchCollectionFromDb('users'),
-        fetchCollectionFromDb(EF_COLLECTIONS.leagues),
-        fetchCollectionFromDb(EF_COLLECTIONS.fixtures),
-        fetchCollectionFromDb(EF_COLLECTIONS.users),
-        fetchCollectionFromDb(EF_COLLECTIONS.players),
-        fetchCollectionFromDb(EF_COLLECTIONS.results),
-        fetchCollectionFromDb(EF_COLLECTIONS.standings)
-    ]);
-
-    const normalizedLeagues = dedupeBy(
-        leagues.map(normalizeLeagueRow).filter((l)=> l.name),
-        (l)=> normalizeKey(l.name)
-    );
-    if(normalizedLeagues.length) setMemoryJson('leagues', normalizedLeagues);
-
-    const normalizedTeams = dedupeBy(
-        teams.map(normalizeTeamRow).filter((t)=> t.teamName),
-        (t)=> `${normalizeKey(t.teamName)}::${normalizeKey(t.league)}`
-    );
-    const normalizedFixtures = dedupeBy(
-        fixtures.map(normalizeFixtureRow).filter((f)=> f.league && f.home && f.away && f.date),
-        (f)=> `${normalizeKey(f.league)}::${normalizeKey(f.home)}::${normalizeKey(f.away)}::${normalizeKey(f.date)}`
-    );
-    const normalizedStandings = dedupeBy(
-        (standings || []).filter((s)=> s.team && s.league),
-        (s)=> `${normalizeKey(s.league)}::${normalizeKey(s.team)}`
-    );
-    const normalizedPlayers = dedupeBy(
-        (players || []).filter((p)=> p.name && p.team),
-        (p)=> `${normalizeKey(p.team)}::${normalizeKey(p.name)}`
-    );
-    const normalizedAccounts = dedupeBy(
-        users.map(normalizeAccountRow).filter((u)=> u.email || u.team),
-        (u)=> normalizeKey(u.email || u.team)
-    );
-
-    setMemoryJson('teams', normalizedTeams);
-    setMemoryJson('fixtures', normalizedFixtures);
-    setMemoryJson('standings', normalizedStandings);
-    setMemoryJson('players', normalizedPlayers);
-    setMemoryJson('accounts', normalizedAccounts);
-
-    const normalizedEfLeagues = dedupeBy(
-        efLeagues
-            .map((league)=>({
-                id: String(league?.id || '').trim(),
-                name: collapseSpaces(league?.name || ''),
-                fee: Number(league?.fee ?? 200),
-                updatedAtMs: Number(league?.updatedAtMs || 0)
-            }))
-            .filter((league)=> league.name),
-        (league)=> normalizeKey(league.name)
-    );
-    const normalizedEfPlayers = dedupeBy(
-        efPlayers
-            .map((player)=>({
-                ...player,
-                id: String(player?.id || player?.uid || '').trim(),
-                uid: String(player?.uid || player?.id || '').trim(),
-                playerName: collapseSpaces(player?.playerName || player?.name || ''),
-                email: String(player?.email || '').trim().toLowerCase(),
-                league: collapseSpaces(player?.league || ''),
-                team: collapseSpaces(player?.team || ''),
-                paymentStatus: collapseSpaces(player?.paymentStatus || ''),
-                status: collapseSpaces(player?.status || '')
-            }))
-            .filter((player)=> player.playerName || player.email),
-        (player)=> normalizeKey(player.uid || player.email || `${player.playerName}::${player.league}`)
-    );
-    const normalizedEfFixtures = dedupeBy(
-        efFixtures
-            .map((fixture)=>({
-                ...fixture,
-                id: String(fixture?.id || '').trim(),
-                league: collapseSpaces(fixture?.league || ''),
-                home: collapseSpaces(fixture?.home || ''),
-                away: collapseSpaces(fixture?.away || ''),
-                date: String(fixture?.date || '').trim(),
-                status: collapseSpaces(fixture?.status || 'Scheduled')
-            }))
-            .filter((fixture)=> fixture.league && fixture.home && fixture.away),
-        (fixture)=> normalizeKey(fixture.id || `${fixture.league}::${fixture.home}::${fixture.away}::${fixture.date}`)
-    );
-    const normalizedEfUsers = dedupeBy(
-        efUsers
-            .map((user)=>({
-                ...user,
-                id: String(user?.id || user?.uid || '').trim(),
-                uid: String(user?.uid || user?.id || '').trim(),
-                email: String(user?.email || '').trim().toLowerCase(),
-                playerName: collapseSpaces(user?.playerName || ''),
-                league: collapseSpaces(user?.league || ''),
-                status: collapseSpaces(user?.status || '')
-            }))
-            .filter((user)=> user.uid || user.email),
-        (user)=> normalizeKey(user.uid || user.email)
-    );
-    const normalizedEfResults = dedupeBy(
-        efResults
-            .map((result)=>({
-                ...result,
-                id: String(result?.id || result?.fixtureId || '').trim(),
-                fixtureId: String(result?.fixtureId || result?.id || '').trim(),
-                league: collapseSpaces(result?.league || '')
-            }))
-            .filter((result)=> result.id || result.fixtureId),
-        (result)=> normalizeKey(result.id || result.fixtureId)
-    );
-    const normalizedEfStandings = dedupeBy(
-        efStandings
-            .map((row)=>({
-                ...row,
-                id: String(row?.id || '').trim(),
-                league: collapseSpaces(row?.league || ''),
-                player: collapseSpaces(row?.player || row?.team || '')
-            }))
-            .filter((row)=> row.league && row.player),
-        (row)=> normalizeKey(row.id || `${row.league}::${row.player}`)
-    );
-
-    setMemoryJson('efootball_leagues', normalizedEfLeagues);
-    setMemoryJson('efootball_players', normalizedEfPlayers);
-    setMemoryJson('efootball_fixtures', normalizedEfFixtures);
-    setMemoryJson('efootball_users', normalizedEfUsers);
-    setMemoryJson('efootball_results', normalizedEfResults);
-    setMemoryJson('efootball_standings', normalizedEfStandings);
-}
-
-async function syncAdminFromFirebase(forceReload = false){
-    try{
-        if(window.ummaRemoteStore){
-            const loader = forceReload && window.ummaRemoteStore.reloadState
-                ? window.ummaRemoteStore.reloadState
-                : window.ummaRemoteStore.loadState;
-            const remote = await loader();
-            applyRemoteState(remote || {});
-        }
-        await hydrateAdminCollectionsFromFirestore();
-    } catch {
-        // Keep currently loaded memory state if refresh fails.
-    }
-}
-
-function startAdminLiveRefresh(){
-    stopAdminLiveRefresh();
-    adminRefreshTimer = setInterval(()=>{
-        if(document.visibilityState === 'hidden') return;
-        adminWindowFocusRefresh();
-    }, 7000);
-    window.addEventListener('focus', adminWindowFocusRefresh);
-}
-
-function stopAdminLiveRefresh(){
-    if(adminRefreshTimer){
-        clearInterval(adminRefreshTimer);
-        adminRefreshTimer = null;
-    }
-    window.removeEventListener('focus', adminWindowFocusRefresh);
-}
-
 function startRemoteSubscription(){
     if(!window.ummaRemoteStore?.subscribeState) return;
     window.ummaRemoteStore.subscribeState((remote)=>{
@@ -546,75 +173,41 @@ function bindAdminActions(){
     const awayGoalBtn = document.getElementById('awayGoalBtn');
     const undoGoalBtn = document.getElementById('undoGoalBtn');
     const refreshResultsBtn = document.getElementById('refreshResultsBtn');
-    const resultLeagueInput = document.getElementById('resultLeagueInput');
     const resultFixtureInput = document.getElementById('resultFixtureInput');
     const carryQualifiedBtn = document.getElementById('carryQualifiedBtn');
     const finishPremierBtn = document.getElementById('finishPremierBtn');
     const teamsBody = document.getElementById('adminTeamsBody');
     const allTeamsBody = document.getElementById('adminAllTeamsBody');
-    const weeklyPaymentsBody = document.getElementById('adminWeeklyPaymentsBody');
     const leaguesBody = document.getElementById('adminLeaguesBody');
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
-    const efLeagueFilter = document.getElementById('adminEfLeagueFilter');
-    const refreshEfootballBtn = document.getElementById('refreshEfootballBtn');
-    const autoPlanEfLeagueBtn = document.getElementById('autoPlanEfLeagueBtn');
-    const autoPlanEfAllBtn = document.getElementById('autoPlanEfAllBtn');
-    const efResultsBody = document.getElementById('adminEfResultsBody');
 
-    function runButtonAction(btn, action){
-        if(!btn) return Promise.resolve(action());
-        if(btn.disabled || btn.dataset.busy === 'true') return Promise.resolve();
-        btn.dataset.busy = 'true';
-        const previousText = btn.textContent;
-        btn.disabled = true;
-        return Promise.resolve()
-            .then(()=> action())
-            .finally(()=>{
-                btn.disabled = false;
-                btn.dataset.busy = 'false';
-                if(typeof previousText === 'string') btn.textContent = previousText;
-            });
-    }
-
-    if(refreshBtn) refreshBtn.addEventListener('click', ()=> runButtonAction(refreshBtn, ()=> renderAllAdminData(true)));
-    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('index.html'), '_blank'));
-    if(addLeagueBtn) addLeagueBtn.addEventListener('click', ()=> runButtonAction(addLeagueBtn, addLeague));
-    if(addFixtureBtn) addFixtureBtn.addEventListener('click', ()=> runButtonAction(addFixtureBtn, addFixture));
-    if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', ()=> runButtonAction(saveSemesterBtn, saveSemesterCalendar));
-    if(autoPlanFixturesBtn) autoPlanFixturesBtn.addEventListener('click', ()=> runButtonAction(autoPlanFixturesBtn, autoPlanSemesterFixtures));
-    if(planLeagueFixturesBtn) planLeagueFixturesBtn.addEventListener('click', ()=> runButtonAction(planLeagueFixturesBtn, planSelectedLeagueFixtures));
+    if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
+    if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open('register.html', '_blank'));
+    if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
+    if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
+    if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', saveSemesterCalendar);
+    if(autoPlanFixturesBtn) autoPlanFixturesBtn.addEventListener('click', autoPlanSemesterFixtures);
+    if(planLeagueFixturesBtn) planLeagueFixturesBtn.addEventListener('click', planSelectedLeagueFixtures);
     if(fixtureLeagueInput) fixtureLeagueInput.addEventListener('change', ()=>{
         renderFixtureTeamSuggestions();
         renderPlannerHints();
     });
     if(fixtureDateInput) fixtureDateInput.addEventListener('change', updateManualDayPreview);
     if(planLeagueInput) planLeagueInput.addEventListener('change', renderPlannerHints);
-    if(resultLeagueInput) resultLeagueInput.addEventListener('change', ()=>{
-        populateResultFixtureInputs();
-        renderResultFixtureContext();
-    });
     if(resultFixtureInput) resultFixtureInput.addEventListener('change', renderResultFixtureContext);
-    if(saveResultBtn) saveResultBtn.addEventListener('click', ()=> runButtonAction(saveResultBtn, saveFixtureResult));
-    if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', ()=> runButtonAction(saveHalfTimeBtn, saveHalfTimeResult));
-    if(homeGoalBtn) homeGoalBtn.addEventListener('click', ()=> runButtonAction(homeGoalBtn, ()=> addGoalEvent('home')));
-    if(awayGoalBtn) awayGoalBtn.addEventListener('click', ()=> runButtonAction(awayGoalBtn, ()=> addGoalEvent('away')));
-    if(undoGoalBtn) undoGoalBtn.addEventListener('click', ()=> runButtonAction(undoGoalBtn, undoLastGoalEvent));
+    if(saveResultBtn) saveResultBtn.addEventListener('click', saveFixtureResult);
+    if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', saveHalfTimeResult);
+    if(homeGoalBtn) homeGoalBtn.addEventListener('click', ()=> addGoalEvent('home'));
+    if(awayGoalBtn) awayGoalBtn.addEventListener('click', ()=> addGoalEvent('away'));
+    if(undoGoalBtn) undoGoalBtn.addEventListener('click', undoLastGoalEvent);
     if(refreshResultsBtn) refreshResultsBtn.addEventListener('click', ()=>{
         populateResultFixtureInputs();
         renderResultFixtureContext();
     });
-    if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', ()=> runButtonAction(carryQualifiedBtn, carryQualifiedTeamsToChampions));
-    if(finishPremierBtn) finishPremierBtn.addEventListener('click', ()=> runButtonAction(finishPremierBtn, finishPremierLeague));
-    if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', ()=>{
-        renderTeamTable();
-        renderAllTeamsManagementTable();
-        renderWeeklyPaymentsTable();
-    });
-    if(efLeagueFilter) efLeagueFilter.addEventListener('change', renderEfootballAdminData);
-    if(refreshEfootballBtn) refreshEfootballBtn.addEventListener('click', ()=> runButtonAction(refreshEfootballBtn, ()=> renderAllAdminData(true)));
-    if(autoPlanEfLeagueBtn) autoPlanEfLeagueBtn.addEventListener('click', ()=> runButtonAction(autoPlanEfLeagueBtn, autoPlanSelectedEfootballLeague));
-    if(autoPlanEfAllBtn) autoPlanEfAllBtn.addEventListener('click', ()=> runButtonAction(autoPlanEfAllBtn, autoPlanAllEfootballLeagues));
+    if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', carryQualifiedTeamsToChampions);
+    if(finishPremierBtn) finishPremierBtn.addEventListener('click', finishPremierLeague);
+    if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', renderTeamTable);
 
     if(teamsBody){
         teamsBody.addEventListener('click', (e)=>{
@@ -627,16 +220,13 @@ function bindAdminActions(){
             if(action === 'run-team-action'){
                 const statusSelect = document.getElementById(`team-status-${slugify(teamName)}`);
                 if(!statusSelect) return;
-                runButtonAction(btn, ()=> updateTeamStatus(teamName, statusSelect.value));
+                updateTeamStatus(teamName, statusSelect.value);
             }
             if(action === 'mark-paid'){
-                runButtonAction(btn, ()=> markTeamPaid(teamName));
-            }
-            if(action === 'make-payment'){
-                runButtonAction(btn, ()=> makeTeamPayment(teamName));
+                markTeamPaid(teamName);
             }
             if(action === 'delete'){
-                runButtonAction(btn, ()=> deleteTeam(teamName));
+                deleteTeam(teamName);
             }
         });
     }
@@ -650,45 +240,23 @@ function bindAdminActions(){
             if(!teamName || !action) return;
 
             if(action === 'all-mark-paid'){
-                runButtonAction(btn, ()=> markTeamPaid(teamName));
-                return;
-            }
-            if(action === 'all-make-payment'){
-                runButtonAction(btn, ()=> makeTeamPayment(teamName));
+                markTeamPaid(teamName);
                 return;
             }
             if(action === 'all-activate'){
-                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Active'));
+                updateTeamStatus(teamName, 'Active');
                 return;
             }
             if(action === 'all-pending'){
-                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Pending Payment'));
+                updateTeamStatus(teamName, 'Pending Payment');
                 return;
             }
             if(action === 'all-withdraw'){
-                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Withdrawn'));
+                updateTeamStatus(teamName, 'Withdrawn');
                 return;
             }
             if(action === 'all-delete'){
-                runButtonAction(btn, ()=> deleteTeam(teamName));
-            }
-        });
-    }
-
-    if(weeklyPaymentsBody){
-        weeklyPaymentsBody.addEventListener('click', (e)=>{
-            const btn = e.target.closest('button[data-action]');
-            if(!btn) return;
-            const teamName = btn.dataset.team;
-            const weekKey = btn.dataset.weekKey;
-            const action = btn.dataset.action;
-            if(!teamName || !weekKey || !action) return;
-            if(action === 'approve-weekly-payment'){
-                runButtonAction(btn, ()=> setTeamWeeklyPaymentReview(teamName, weekKey, 'Approved'));
-                return;
-            }
-            if(action === 'reject-weekly-payment'){
-                runButtonAction(btn, ()=> setTeamWeeklyPaymentReview(teamName, weekKey, 'Rejected'));
+                deleteTeam(teamName);
             }
         });
     }
@@ -700,11 +268,11 @@ function bindAdminActions(){
             const leagueName = btn.dataset.league;
             if(!leagueName) return;
             if(btn.dataset.action === 'delete-league'){
-                runButtonAction(btn, ()=> deleteLeague(leagueName));
+                deleteLeague(leagueName);
                 return;
             }
             if(btn.dataset.action === 'plan-league'){
-                runButtonAction(btn, ()=> planLeagueByName(leagueName));
+                planLeagueByName(leagueName);
             }
         });
     }
@@ -717,34 +285,15 @@ function bindAdminActions(){
             if(!fixtureId) return;
             const action = btn.dataset.action;
             if(action === 'delete-fixture'){
-                runButtonAction(btn, ()=> deleteFixture(fixtureId));
+                deleteFixture(fixtureId);
                 return;
             }
             if(action === 'approve-fixture'){
-                runButtonAction(btn, ()=> updateFixtureStatus(fixtureId, 'Approved'));
+                updateFixtureStatus(fixtureId, 'Approved');
                 return;
             }
             if(action === 'abandon-fixture'){
-                runButtonAction(btn, ()=> updateFixtureStatus(fixtureId, 'Abandoned'));
-            }
-        });
-    }
-
-    if(efResultsBody){
-        efResultsBody.addEventListener('click', (e)=>{
-            const btn = e.target.closest('button[data-action]');
-            if(!btn) return;
-            const action = btn.dataset.action;
-            const resultId = String(btn.dataset.resultId || '');
-            const fixtureId = String(btn.dataset.fixtureId || '');
-            const leagueName = String(btn.dataset.league || '');
-            if(!action || !resultId || !fixtureId || !leagueName) return;
-            if(action === 'ef-edit-result'){
-                runButtonAction(btn, ()=> adminEditEfootballResult(resultId, fixtureId, leagueName));
-                return;
-            }
-            if(action === 'ef-delete-result'){
-                runButtonAction(btn, ()=> adminDeleteEfootballResult(resultId, fixtureId, leagueName));
+                updateFixtureStatus(fixtureId, 'Abandoned');
             }
         });
     }
@@ -762,16 +311,13 @@ function hydrateAdminView(){
         if(!authed) menuPanel.classList.remove('open');
     }
     if(authed){
-        startAdminLiveRefresh();
         renderAllAdminData();
         openAdminSection('dashboardSection');
-    } else {
-        stopAdminLiveRefresh();
     }
 }
 
 function openAdminSection(sectionId){
-    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection', 'efootballSection'];
+    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection'];
     sectionIds.forEach((id)=>{
         const section = document.getElementById(id);
         if(section){
@@ -849,7 +395,7 @@ function saveSemesterCalendar(){
     alert('Semester calendar saved');
 }
 
-    async function adminLogin() {
+async function adminLogin() {
     const email = document.getElementById('adminEmail').value.trim().toLowerCase();
     const pass = document.getElementById('adminPass').value;
 
@@ -858,97 +404,79 @@ function saveSemesterCalendar(){
         return;
     }
 
-    if (!window.ummaAuth?.loginAuthUser) {
-        alert('Authentication service is not ready. Reload and try again.');
-        return;
-    }
-
     try {
-        // Login using Firebase Auth
-        await window.ummaAuth.loginAuthUser(email, pass);
+        // 1️ Sign in using Firebase Authentication
+        const userCredential = await firebase.auth()
+            .signInWithEmailAndPassword(email, pass);
 
-        // Only allow the specific admin account
-        if (email !== 'admin@umma.local') {
-            await window.ummaAuth.logoutAuthUser();
-            alert('Invalid admin credentials');
+        const user = userCredential.user;
+
+        if (!user) {
+            alert("Login failed.");
             return;
         }
 
-        // Successful admin login
-        sessionStorage.setItem('adminAuth', 'true');
-        hydrateAdminView();
+        // Check Firestore if this user is an admin
+        const adminDoc = await firebase.firestore()
+            .collection("admins")
+            .doc(user.uid)
+            .get();
+
+        if (adminDoc.exists) {
+            //  User is admin
+            sessionStorage.setItem('adminAuth', 'true');
+            hydrateAdminView();
+        } else {
+            //  Not admin
+            await firebase.auth().signOut();
+            alert("You are not authorized as admin.");
+        }
+
     } catch (err) {
-        console.error(err);
-        alert('Invalid admin email or password');
+        console.error("Admin login error:", err);
+        alert(err.message);
     }
 }
-async function adminLogout(){
+// Admin Logout
+async function adminLogout() {
     sessionStorage.removeItem('adminAuth');
-    if(window.ummaAuth?.logoutAuthUser){
-        try{
-            await window.ummaAuth.logoutAuthUser();
-        } catch {
-            // Ignore sign-out errors.
-        }
+
+    try {
+        await firebase.auth().signOut();
+    } catch (err) {
+        console.error("Logout error:", err);
     }
+
     hydrateAdminView();
 }
 
-async function renderAllAdminData(forceReload = false){
-    if(adminRenderInFlight){
-        adminRenderQueued = true;
-        adminRenderForceQueued = adminRenderForceQueued || Boolean(forceReload);
-        return;
-    }
-    adminRenderInFlight = true;
-    try{
-        await syncAdminFromFirebase(forceReload);
-        renderStats();
-        renderLeagueTable();
-        populateTeamLeagueFilter();
-        populateEfLeagueFilter();
-        renderTeamsByLeagueDirectory();
-        renderAllTeamsManagementTable();
-        renderTeamTable();
-        renderWeeklyPaymentsTable();
-        renderEfootballAdminData();
-        renderFixtureTable();
-        populateFixtureInputs();
-        renderSemesterCalendarInputs();
-        renderPlannerHints();
-        populateResultLeagueInputs();
-        populateResultFixtureInputs();
-        renderResultFixtureContext();
-        renderPremierOutcomePreview();
-        updateManualDayPreview();
-    } finally {
-        adminRenderInFlight = false;
-        if(adminRenderQueued){
-            const nextForce = adminRenderForceQueued;
-            adminRenderQueued = false;
-            adminRenderForceQueued = false;
-            renderAllAdminData(nextForce);
-        }
-    }
+
+function renderAllAdminData(){
+    renderStats();
+    renderLeagueTable();
+    populateTeamLeagueFilter();
+    renderTeamsByLeagueDirectory();
+    renderAllTeamsManagementTable();
+    renderTeamTable();
+    renderFixtureTable();
+    populateFixtureInputs();
+    renderSemesterCalendarInputs();
+    renderPlannerHints();
+    populateResultFixtureInputs();
+    renderResultFixtureContext();
+    renderPremierOutcomePreview();
+    updateManualDayPreview();
 }
 
 function renderAllTeamsManagementTable(){
     const body = document.getElementById('adminAllTeamsBody');
     if(!body) return;
-    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
     const teams = getJSON('teams', [])
-        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter))
         .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.teamName || '').localeCompare(String(b.teamName || '')));
     body.innerHTML = '';
-    if(!leagueFilter){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">Select a league to view registered teams.</td>';
-        body.appendChild(tr);
-        return;
-    }
     if(teams.length === 0){
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">No registered teams found in selected league.</td>';
+        tr.innerHTML = '<td colspan="5" class="muted">No registered teams found.</td>';
         body.appendChild(tr);
         return;
     }
@@ -963,7 +491,6 @@ function renderAllTeamsManagementTable(){
             <td>${escapeHTML(t.status || 'Pending Payment')}</td>
             <td>
                 ${showMarkPaid ? `<button class="btn" data-action="all-mark-paid" data-team="${escapeAttr(t.teamName)}">Mark Paid</button>` : ''}
-                <button class="btn" data-action="all-make-payment" data-team="${escapeAttr(t.teamName)}">Make Payment</button>
                 <button class="btn btn-primary" data-action="all-activate" data-team="${escapeAttr(t.teamName)}">Activate</button>
                 <button class="btn" data-action="all-pending" data-team="${escapeAttr(t.teamName)}">Pending</button>
                 <button class="btn btn-outline" data-action="all-withdraw" data-team="${escapeAttr(t.teamName)}">Withdraw</button>
@@ -1007,18 +534,12 @@ function renderTeamsByLeagueDirectory(){
         const names = list
             .map((t)=> `${escapeHTML(t.teamName)} (${escapeHTML(t.status || 'Pending Payment')})`)
             .join(', ');
-        return `<div style="margin-bottom:6px"><button class="btn btn-outline" data-action="filter-league" data-league="${escapeAttr(leagueName)}">${escapeHTML(leagueName)} (${list.length})</button>: ${names}</div>`;
+        return `<div style="margin-bottom:6px"><strong>${escapeHTML(leagueName)} (${list.length})</strong>: ${names}</div>`;
     }).join('');
-    host.querySelectorAll('button[data-action="filter-league"]').forEach((btn)=>{
-        btn.addEventListener('click', ()=>{
-            const league = btn.dataset.league || '';
-            setTeamLeagueFilter(league);
-        });
-    });
 }
 
 function renderStats(){
-    const leagues = getMergedLeagues();
+    const leagues = getJSON('leagues', []);
     const teams = getJSON('teams', []);
     const fixtures = getJSON('fixtures', []);
     const players = getJSON('players', []);
@@ -1033,7 +554,7 @@ function renderStats(){
 function renderLeagueTable(){
     const body = document.getElementById('adminLeaguesBody');
     if(!body) return;
-    const leagues = getMergedLeagues();
+    const leagues = getJSON('leagues', []);
     body.innerHTML = '';
     leagues.forEach((l)=>{
         const tr = document.createElement('tr');
@@ -1054,525 +575,25 @@ function renderLeagueTable(){
 function populateTeamLeagueFilter(){
     const sel = document.getElementById('adminTeamLeagueFilter');
     if(!sel) return;
-    const leagueSet = new Set(getMergedLeagues().map((l)=> l.name).filter(Boolean));
-    getJSON('teams', []).forEach((t)=>{
-        const leagueName = String(t?.league || '').trim();
-        if(leagueName) leagueSet.add(leagueName);
-    });
-    const leagues = [...leagueSet].sort((a,b)=> String(a).localeCompare(String(b)));
-    const previous = sel.value || '';
+    const leagues = getJSON('leagues', []).map((l)=> l.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    const previous = sel.value || '__all__';
     sel.innerHTML = '';
-    sel.appendChild(new Option('Select league', ''));
     sel.appendChild(new Option('All Leagues', '__all__'));
     leagues.forEach((league)=> sel.appendChild(new Option(league, league)));
-    if(leagues.includes(previous) || previous === '__all__' || previous === ''){
+    if(leagues.includes(previous) || previous === '__all__'){
         sel.value = previous;
     } else {
-        sel.value = '';
+        sel.value = '__all__';
     }
-}
-
-function setTeamLeagueFilter(league){
-    const sel = document.getElementById('adminTeamLeagueFilter');
-    if(!sel) return;
-    const value = String(league || '');
-    if([...sel.options].some((o)=> o.value === value)){
-        sel.value = value;
-    } else {
-        sel.value = '';
-    }
-    renderTeamTable();
-    renderAllTeamsManagementTable();
-    renderWeeklyPaymentsTable();
-}
-
-function getMergedEfootballLeagues(){
-    const map = new Map();
-    ADMIN_EFOOTBALL_LEAGUES.forEach((league)=>{
-        const name = collapseSpaces(league.name);
-        if(!name) return;
-        map.set(normalizeKey(name), {
-            id: String(league.id || slugify(name)),
-            name,
-            fee: Number(league.fee ?? 200)
-        });
-    });
-    getJSON('efootball_leagues', []).forEach((league)=>{
-        const name = collapseSpaces(league?.name || '');
-        if(!name) return;
-        map.set(normalizeKey(name), {
-            id: String(league?.id || slugify(name)),
-            name,
-            fee: Number(league?.fee ?? 200)
-        });
-    });
-    return [...map.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
-}
-
-function populateEfLeagueFilter(){
-    const sel = document.getElementById('adminEfLeagueFilter');
-    if(!sel) return;
-    const previous = sel.value || '';
-    const leagueSet = new Set(getMergedEfootballLeagues().map((l)=> l.name));
-    getJSON('efootball_players', []).forEach((player)=>{
-        const league = collapseSpaces(player?.league || '');
-        if(league) leagueSet.add(league);
-    });
-    getJSON('efootball_fixtures', []).forEach((fixture)=>{
-        const league = collapseSpaces(fixture?.league || '');
-        if(league) leagueSet.add(league);
-    });
-    getJSON('efootball_standings', []).forEach((row)=>{
-        const league = collapseSpaces(row?.league || '');
-        if(league) leagueSet.add(league);
-    });
-    const leagues = [...leagueSet].filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
-    sel.innerHTML = '';
-    sel.appendChild(new Option('Select league', ''));
-    sel.appendChild(new Option('All Leagues', '__all__'));
-    leagues.forEach((league)=> sel.appendChild(new Option(league, league)));
-    if(leagues.includes(previous) || previous === '__all__' || previous === ''){
-        sel.value = previous;
-    } else {
-        sel.value = '';
-    }
-}
-
-function getSelectedEfLeague(){
-    return document.getElementById('adminEfLeagueFilter')?.value || '';
-}
-
-function getEfLeagueHintText(selectedLeague){
-    if(!selectedLeague) return 'Select a league to view players, standings, fixtures, and results.';
-    if(selectedLeague === '__all__') return 'Showing all E-Football leagues.';
-    return `Showing E-Football data for ${selectedLeague}.`;
-}
-
-function renderEfootballAdminData(){
-    const hint = document.getElementById('adminEfHint');
-    const selectedLeague = getSelectedEfLeague();
-    if(hint) hint.textContent = getEfLeagueHintText(selectedLeague);
-    renderEfPlayersTable(selectedLeague);
-    renderEfStandingsTable(selectedLeague);
-    renderEfFixturesTable(selectedLeague);
-    renderEfResultsTable(selectedLeague);
-}
-
-function leagueMatchesFilter(selectedLeague, rowLeague){
-    if(!selectedLeague || selectedLeague === '__all__') return true;
-    return collapseSpaces(selectedLeague) === collapseSpaces(rowLeague || '');
-}
-
-function renderEfPlayersTable(selectedLeague = getSelectedEfLeague()){
-    const body = document.getElementById('adminEfPlayersBody');
-    if(!body) return;
-    const players = getJSON('efootball_players', [])
-        .filter((player)=> leagueMatchesFilter(selectedLeague, player?.league))
-        .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.playerName || '').localeCompare(String(b.playerName || '')));
-    body.innerHTML = '';
-    if(!selectedLeague){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="6" class="muted">Select a league to view registered E-Football players.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(players.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="6" class="muted">No E-Football players found.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    players.forEach((player)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${escapeHTML(player.playerName || '-')}</td>
-            <td>${escapeHTML(player.email || '-')}</td>
-            <td>${escapeHTML(player.team || '-')}</td>
-            <td>${escapeHTML(player.league || '-')}</td>
-            <td>${escapeHTML(player.paymentStatus || '-')}</td>
-            <td>${escapeHTML(player.status || '-')}</td>
-        `;
-        body.appendChild(tr);
-    });
-}
-
-function renderEfStandingsTable(selectedLeague = getSelectedEfLeague()){
-    const body = document.getElementById('adminEfStandingsBody');
-    if(!body) return;
-    const rows = getJSON('efootball_standings', [])
-        .filter((row)=> leagueMatchesFilter(selectedLeague, row?.league))
-        .sort((a,b)=>{
-            if(String(a.league || '') !== String(b.league || '')){
-                return String(a.league || '').localeCompare(String(b.league || ''));
-            }
-            const ptsDelta = Number(b.pts || 0) - Number(a.pts || 0);
-            if(ptsDelta !== 0) return ptsDelta;
-            const gdDelta = Number(b.gd || 0) - Number(a.gd || 0);
-            if(gdDelta !== 0) return gdDelta;
-            return String(a.player || '').localeCompare(String(b.player || ''));
-        });
-    body.innerHTML = '';
-    if(!selectedLeague){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="8" class="muted">Select a league to view E-Football standings.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(rows.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="8" class="muted">No standings found for selected league.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    rows.forEach((row)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${escapeHTML(row.player || '-')}</td>
-            <td>${escapeHTML(row.league || '-')}</td>
-            <td>${Number(row.p || 0)}</td>
-            <td>${Number(row.w || 0)}</td>
-            <td>${Number(row.d || 0)}</td>
-            <td>${Number(row.l || 0)}</td>
-            <td>${Number(row.gd || 0)}</td>
-            <td>${Number(row.pts || 0)}</td>
-        `;
-        body.appendChild(tr);
-    });
-}
-
-function formatFixtureScore(result){
-    const homeGoals = Number(result?.homeGoals);
-    const awayGoals = Number(result?.awayGoals);
-    if(Number.isFinite(homeGoals) && Number.isFinite(awayGoals)){
-        return `${homeGoals} - ${awayGoals}`;
-    }
-    return '-';
-}
-
-function renderEfFixturesTable(selectedLeague = getSelectedEfLeague()){
-    const body = document.getElementById('adminEfFixturesBody');
-    if(!body) return;
-    const rows = getJSON('efootball_fixtures', [])
-        .filter((fixture)=> leagueMatchesFilter(selectedLeague, fixture?.league))
-        .sort((a,b)=> String(a.date || '').localeCompare(String(b.date || '')));
-    body.innerHTML = '';
-    if(!selectedLeague){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">Select a league to view E-Football fixtures.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(rows.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">No fixtures found for selected league.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    rows.forEach((fixture)=>{
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${escapeHTML(fixture.league || '-')}</td>
-            <td>${escapeHTML(fixture.home || '-')} vs ${escapeHTML(fixture.away || '-')}</td>
-            <td>${escapeHTML(fixture.date || '-')}</td>
-            <td>${escapeHTML(fixture.status || 'Scheduled')}</td>
-            <td>${escapeHTML(formatFixtureScore(fixture.result))}</td>
-        `;
-        body.appendChild(tr);
-    });
-}
-
-function renderEfResultsTable(selectedLeague = getSelectedEfLeague()){
-    const body = document.getElementById('adminEfResultsBody');
-    if(!body) return;
-    const results = getJSON('efootball_results', [])
-        .filter((row)=> leagueMatchesFilter(selectedLeague, row?.league))
-        .sort((a,b)=> String(b.submittedAt || b.updatedAtMs || '').localeCompare(String(a.submittedAt || a.updatedAtMs || '')));
-    body.innerHTML = '';
-    if(!selectedLeague){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">Select a league to view E-Football results.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(results.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">No results found for selected league.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    results.forEach((result)=>{
-        const score = formatFixtureScore({ homeGoals: result?.homeGoals, awayGoals: result?.awayGoals });
-        const submitted = String(result?.submittedAt || '').trim() || '-';
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${escapeHTML(result.league || '-')}</td>
-            <td>${escapeHTML(result.home || '-')} vs ${escapeHTML(result.away || '-')}</td>
-            <td>${escapeHTML(score)}</td>
-            <td>${escapeHTML(submitted)}</td>
-            <td>
-                <button class="btn" data-action="ef-edit-result" data-result-id="${escapeAttr(result.id || '')}" data-fixture-id="${escapeAttr(result.fixtureId || '')}" data-league="${escapeAttr(result.league || '')}">Edit</button>
-                <button class="btn btn-outline danger" data-action="ef-delete-result" data-result-id="${escapeAttr(result.id || '')}" data-fixture-id="${escapeAttr(result.fixtureId || '')}" data-league="${escapeAttr(result.league || '')}">Delete</button>
-            </td>
-        `;
-        body.appendChild(tr);
-    });
-}
-
-async function adminEditEfootballResult(resultId, fixtureId, leagueName){
-    const results = getJSON('efootball_results', []);
-    const idx = results.findIndex((row)=> String(row.id) === String(resultId));
-    if(idx === -1){
-        alert('Result not found.');
-        return;
-    }
-    const currentHome = Number(results[idx].homeGoals || 0);
-    const currentAway = Number(results[idx].awayGoals || 0);
-    const homeRaw = prompt('Enter home goals', String(currentHome));
-    if(homeRaw === null) return;
-    const awayRaw = prompt('Enter away goals', String(currentAway));
-    if(awayRaw === null) return;
-    const homeGoals = Number(String(homeRaw).trim());
-    const awayGoals = Number(String(awayRaw).trim());
-    if(!Number.isFinite(homeGoals) || homeGoals < 0 || !Number.isFinite(awayGoals) || awayGoals < 0){
-        alert('Enter valid score values.');
-        return;
-    }
-
-    results[idx].homeGoals = homeGoals;
-    results[idx].awayGoals = awayGoals;
-    results[idx].updatedAtMs = Date.now();
-    setJSON('efootball_results', results);
-
-    const fixtures = getJSON('efootball_fixtures', []);
-    const fIdx = fixtures.findIndex((fixture)=> String(fixture.id) === String(fixtureId));
-    if(fIdx >= 0){
-        fixtures[fIdx].result = { homeGoals, awayGoals };
-        fixtures[fIdx].status = 'Played';
-        fixtures[fIdx].updatedAtMs = Date.now();
-        setJSON('efootball_fixtures', fixtures);
-    }
-
-    if(window.ummaFire?.db){
-        await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.results, String(resultId)), {
-            homeGoals,
-            awayGoals,
-            updatedAtMs: Date.now()
-        }, { merge: true });
-        if(String(fixtureId)){
-            await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.fixtures, String(fixtureId)), {
-                result: { homeGoals, awayGoals },
-                status: 'Played',
-                updatedAtMs: Date.now()
-            }, { merge: true });
-        }
-    }
-
-    await recomputeEfootballStandings(leagueName);
-    await renderAllAdminData(true);
-}
-
-async function adminDeleteEfootballResult(resultId, fixtureId, leagueName){
-    const ok = confirm('Delete this E-Football result?');
-    if(!ok) return;
-
-    const results = getJSON('efootball_results', []).filter((row)=> String(row.id) !== String(resultId));
-    setJSON('efootball_results', results);
-
-    const fixtures = getJSON('efootball_fixtures', []);
-    const fIdx = fixtures.findIndex((fixture)=> String(fixture.id) === String(fixtureId));
-    if(fIdx >= 0){
-        fixtures[fIdx].status = 'Scheduled';
-        delete fixtures[fIdx].result;
-        fixtures[fIdx].updatedAtMs = Date.now();
-        setJSON('efootball_fixtures', fixtures);
-    }
-
-    if(window.ummaFire?.db){
-        try{
-            await deleteDoc(doc(window.ummaFire.db, EF_COLLECTIONS.results, String(resultId)));
-        } catch {
-            // Ignore delete errors and continue local refresh.
-        }
-        if(String(fixtureId)){
-            await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.fixtures, String(fixtureId)), {
-                result: null,
-                status: 'Scheduled',
-                updatedAtMs: Date.now()
-            }, { merge: true });
-        }
-    }
-
-    await recomputeEfootballStandings(leagueName);
-    await renderAllAdminData(true);
-}
-
-async function recomputeEfootballStandings(leagueName){
-    const league = collapseSpaces(leagueName || '');
-    if(!league) return;
-    const players = getJSON('efootball_players', [])
-        .filter((player)=> collapseSpaces(player?.league || '') === league)
-        .map((player)=> collapseSpaces(player?.playerName || ''))
-        .filter(Boolean);
-    const table = {};
-    players.forEach((player)=>{
-        table[player] = { league, player, p:0, w:0, d:0, l:0, gd:0, pts:0, updatedAtMs: Date.now() };
-    });
-
-    const fixtures = getJSON('efootball_fixtures', [])
-        .filter((fixture)=> collapseSpaces(fixture?.league || '') === league)
-        .filter((fixture)=> Number.isFinite(Number(fixture?.result?.homeGoals)) && Number.isFinite(Number(fixture?.result?.awayGoals)));
-
-    fixtures.forEach((fixture)=>{
-        const home = collapseSpaces(fixture.home || '');
-        const away = collapseSpaces(fixture.away || '');
-        const hg = Number(fixture.result.homeGoals);
-        const ag = Number(fixture.result.awayGoals);
-        if(!home || !away) return;
-        if(!table[home]) table[home] = { league, player: home, p:0, w:0, d:0, l:0, gd:0, pts:0, updatedAtMs: Date.now() };
-        if(!table[away]) table[away] = { league, player: away, p:0, w:0, d:0, l:0, gd:0, pts:0, updatedAtMs: Date.now() };
-        table[home].p += 1;
-        table[away].p += 1;
-        table[home].gd += (hg - ag);
-        table[away].gd += (ag - hg);
-        if(hg > ag){
-            table[home].w += 1; table[home].pts += 3;
-            table[away].l += 1;
-        } else if(ag > hg){
-            table[away].w += 1; table[away].pts += 3;
-            table[home].l += 1;
-        } else {
-            table[home].d += 1; table[home].pts += 1;
-            table[away].d += 1; table[away].pts += 1;
-        }
-    });
-
-    const standings = getJSON('efootball_standings', []);
-    const withoutLeague = standings.filter((row)=> collapseSpaces(row?.league || '') !== league);
-    const rebuilt = Object.values(table).map((row)=>({
-        id: `${slugify(league)}__${slugify(row.player)}`,
-        league: row.league,
-        player: row.player,
-        p: row.p,
-        w: row.w,
-        d: row.d,
-        l: row.l,
-        gd: row.gd,
-        pts: row.pts,
-        updatedAtMs: Date.now()
-    }));
-    setJSON('efootball_standings', [...withoutLeague, ...rebuilt]);
-
-    if(window.ummaFire?.db){
-        await Promise.all(rebuilt.map((row)=>
-            setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.standings, row.id), row, { merge: true })
-        ));
-    }
-}
-
-function getEfootballPlayersByLeague(leagueName){
-    return dedupeBy(
-        getJSON('efootball_players', [])
-            .filter((player)=> collapseSpaces(player?.league || '') === collapseSpaces(leagueName))
-            .filter((player)=> collapseSpaces(player?.playerName || ''))
-            .filter((player)=> collapseSpaces(player?.status || 'Active').toLowerCase() !== 'withdrawn'),
-        (player)=> normalizeKey(player.playerName)
-    );
-}
-
-async function autoPlanSelectedEfootballLeague(){
-    const selectedLeague = getSelectedEfLeague();
-    if(!selectedLeague || selectedLeague === '__all__'){
-        alert('Select one E-Football league first.');
-        return;
-    }
-    const created = await autoPlanEfootballLeagueFixtures(selectedLeague);
-    if(created <= 0){
-        alert(`No new fixtures planned for ${selectedLeague}.`);
-    } else {
-        alert(`Planned ${created} new E-Football fixtures for ${selectedLeague}.`);
-    }
-    await renderAllAdminData(true);
-}
-
-async function autoPlanAllEfootballLeagues(){
-    const leagues = getMergedEfootballLeagues().map((league)=> league.name);
-    if(leagues.length === 0){
-        alert('No E-Football leagues found.');
-        return;
-    }
-    let createdTotal = 0;
-    for(const leagueName of leagues){
-        // eslint-disable-next-line no-await-in-loop
-        createdTotal += await autoPlanEfootballLeagueFixtures(leagueName);
-    }
-    alert(createdTotal > 0
-        ? `Planned ${createdTotal} new E-Football fixtures across all leagues.`
-        : 'No new E-Football fixtures were needed.');
-    await renderAllAdminData(true);
-}
-
-async function autoPlanEfootballLeagueFixtures(leagueName){
-    const players = getEfootballPlayersByLeague(leagueName).map((player)=> player.playerName);
-    if(players.length < 2){
-        return 0;
-    }
-    const existing = getJSON('efootball_fixtures', []).filter((fixture)=> collapseSpaces(fixture?.league || '') === collapseSpaces(leagueName));
-    const existingPairSet = new Set(existing.map((fixture)=> pairKey(fixture.home, fixture.away)));
-    const pairs = buildPairs(players);
-    const toCreate = pairs.filter((pair)=> !existingPairSet.has(pairKey(pair.home, pair.away)));
-    if(toCreate.length === 0){
-        return 0;
-    }
-
-    const nowMs = Date.now();
-    const newRows = toCreate.map((pair, idx)=>{
-        const fixtureDate = new Date(nowMs + (idx + 1) * 86400000);
-        const id = `ef-${slugify(leagueName)}-${slugify(pair.home)}-${slugify(pair.away)}-${nowMs + idx}`;
-        return {
-            id,
-            league: leagueName,
-            home: pair.home,
-            away: pair.away,
-            date: `${formatYmd(fixtureDate)} 20:00`,
-            status: 'Scheduled',
-            updatedAtMs: Date.now()
-        };
-    });
-
-    setJSON('efootball_fixtures', [...existing, ...newRows, ...getJSON('efootball_fixtures', []).filter((fixture)=> collapseSpaces(fixture?.league || '') !== collapseSpaces(leagueName))]);
-
-    if(window.ummaFire?.db){
-        await Promise.all(newRows.map((fixture)=>
-            setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.fixtures, fixture.id), fixture, { merge: true })
-        ));
-    }
-    return newRows.length;
-}
-
-function pairKey(home, away){
-    const teams = [collapseSpaces(home || ''), collapseSpaces(away || '')].sort((a,b)=> a.localeCompare(b));
-    return normalizeKey(`${teams[0]}::${teams[1]}`);
 }
 
 function renderTeamTable(){
     const body = document.getElementById('adminTeamsBody');
     if(!body) return;
-    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
+    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '__all__';
     const teams = getJSON('teams', [])
-        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter));
+        .filter((t)=> leagueFilter === '__all__' || t.league === leagueFilter);
     body.innerHTML = '';
-    if(!leagueFilter){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="9" class="muted">Select a league to view registered teams.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(teams.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="9" class="muted">No teams found for selected league.</td>';
-        body.appendChild(tr);
-        return;
-    }
     teams.forEach((t)=>{
         const id = slugify(t.teamName);
         const statusId = `team-status-${id}`;
@@ -1595,114 +616,11 @@ function renderTeamTable(){
             <td>
                 <button class="btn btn-primary" data-action="run-team-action" data-team="${escapeAttr(t.teamName)}">Save</button>
                 ${showMarkPaid ? `<button class="btn" data-action="mark-paid" data-team="${escapeAttr(t.teamName)}">Mark Paid</button>` : ''}
-                <button class="btn" data-action="make-payment" data-team="${escapeAttr(t.teamName)}">Make Payment</button>
                 <button class="btn btn-outline danger" data-action="delete" data-team="${escapeAttr(t.teamName)}">Delete</button>
             </td>
         `;
         body.appendChild(tr);
     });
-}
-
-function getTeamMaintenanceRecords(team){
-    const fromHistory = Array.isArray(team?.maintenancePaymentHistory)
-        ? team.maintenancePaymentHistory.filter((row)=> row && typeof row === 'object')
-        : [];
-    const latest = team?.maintenancePayment && typeof team.maintenancePayment === 'object'
-        ? [team.maintenancePayment]
-        : [];
-    const merged = [...latest, ...fromHistory];
-    const byWeek = new Map();
-    merged.forEach((row)=>{
-        const weekKey = collapseSpaces(row.weekKey || '');
-        const mpesaRef = collapseSpaces(row.mpesaRef || '');
-        if(!weekKey || !mpesaRef) return;
-        const prev = byWeek.get(weekKey);
-        if(!prev || Number(row.submittedAtMs || 0) >= Number(prev.submittedAtMs || 0)){
-            byWeek.set(weekKey, {
-                weekKey,
-                weekLabel: collapseSpaces(row.weekLabel || weekKey),
-                mpesaRef,
-                submittedAtMs: Number(row.submittedAtMs || 0),
-                verificationStatus: collapseSpaces(row.verificationStatus || ''),
-                reviewedAtMs: Number(row.reviewedAtMs || 0)
-            });
-        }
-    });
-    return [...byWeek.values()].sort((a,b)=> Number(b.submittedAtMs || 0) - Number(a.submittedAtMs || 0));
-}
-
-function getWeeklyReviewText(record){
-    const review = collapseSpaces(record?.verificationStatus || '');
-    if(review) return review;
-    return 'Pending Verification';
-}
-
-function formatDateTime(value){
-    const ms = Number(value || 0);
-    if(!Number.isFinite(ms) || ms <= 0) return '-';
-    return new Date(ms).toLocaleString();
-}
-
-function renderWeeklyPaymentsTable(){
-    const body = document.getElementById('adminWeeklyPaymentsBody');
-    if(!body) return;
-    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
-    const teams = getJSON('teams', [])
-        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter))
-        .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.teamName || '').localeCompare(String(b.teamName || '')));
-
-    body.innerHTML = '';
-    if(!leagueFilter){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="9" class="muted">Select a league to view weekly payments.</td>';
-        body.appendChild(tr);
-        return;
-    }
-    if(teams.length === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="9" class="muted">No teams found for selected league.</td>';
-        body.appendChild(tr);
-        return;
-    }
-
-    let rowsAdded = 0;
-    teams.forEach((team)=>{
-        const records = getTeamMaintenanceRecords(team);
-        if(records.length === 0) return;
-        const latest = records[0];
-        const submittedAtText = formatDateTime(latest.submittedAtMs);
-        const reviewedAtText = formatDateTime(latest.reviewedAtMs);
-        const historyText = records.slice(0, 4)
-            .map((row)=> `${row.weekLabel}: ${row.mpesaRef} [${formatDateTime(row.submittedAtMs)}] (${getWeeklyReviewText(row)}${row.reviewedAtMs ? ` @ ${formatDateTime(row.reviewedAtMs)}` : ''})`)
-            .join(' | ');
-        const reviewText = getWeeklyReviewText(latest);
-        const disableApprove = reviewText === 'Approved';
-        const disableReject = reviewText === 'Rejected';
-
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${escapeHTML(team.teamName || '-')}</td>
-            <td>${escapeHTML(team.league || '-')}</td>
-            <td>${escapeHTML(latest.weekLabel || latest.weekKey || '-')}</td>
-            <td>${escapeHTML(latest.mpesaRef || '-')}</td>
-            <td>${escapeHTML(submittedAtText)}</td>
-            <td>${escapeHTML(reviewText)}</td>
-            <td>${escapeHTML(reviewedAtText)}</td>
-            <td>${escapeHTML(historyText || '-')}</td>
-            <td>
-                <button class="btn btn-primary" data-action="approve-weekly-payment" data-team="${escapeAttr(team.teamName)}" data-week-key="${escapeAttr(latest.weekKey)}" ${disableApprove ? 'disabled' : ''}>Approve</button>
-                <button class="btn btn-outline" data-action="reject-weekly-payment" data-team="${escapeAttr(team.teamName)}" data-week-key="${escapeAttr(latest.weekKey)}" ${disableReject ? 'disabled' : ''}>Reject</button>
-            </td>
-        `;
-        body.appendChild(tr);
-        rowsAdded += 1;
-    });
-
-    if(rowsAdded === 0){
-        const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="9" class="muted">No weekly payment submissions yet in selected league.</td>';
-        body.appendChild(tr);
-    }
 }
 
 function renderFixtureTable(){
@@ -1729,7 +647,7 @@ function renderFixtureTable(){
 }
 
 function populateFixtureInputs(){
-    const leagues = getMergedLeagues();
+    const leagues = getJSON('leagues', []);
     const leagueSel = document.getElementById('fixtureLeagueInput');
     const planLeagueSel = document.getElementById('planLeagueInput');
     const currentFixtureLeague = leagueSel?.value || '';
@@ -1749,21 +667,6 @@ function populateFixtureInputs(){
         }
     }
     renderFixtureTeamSuggestions();
-}
-
-function populateResultLeagueInputs(){
-    const leagueSel = document.getElementById('resultLeagueInput');
-    if(!leagueSel) return;
-    const previous = leagueSel.value || '';
-    const leagues = getMergedLeagues();
-    leagueSel.innerHTML = '';
-    leagueSel.appendChild(new Option('Select League', ''));
-    leagues.forEach((l)=> leagueSel.appendChild(new Option(l.name, l.name)));
-    if(previous && leagues.some((l)=> l.name === previous)){
-        leagueSel.value = previous;
-    } else if(!previous && leagues.length){
-        leagueSel.value = leagues[0].name;
-    }
 }
 
 function renderFixtureTeamSuggestions(){
@@ -1814,7 +717,7 @@ function updateManualDayPreview(){
     dayPreview.value = days[d.getDay()];
 }
 
-async function addLeague(){
+function addLeague(){
     const rawName = document.getElementById('leagueNameInput').value.trim();
     const descInput = document.getElementById('leagueDescInput').value.trim();
     const name = collapseSpaces(rawName);
@@ -1832,26 +735,11 @@ async function addLeague(){
         return;
     }
     const desc = collapseSpaces(descInput) || 'Semester format: fixtures are scheduled week-by-week through the semester.';
-    const id = slugify(name);
-    if(window.ummaFire?.db){
-        try{
-            await setDoc(doc(window.ummaFire.db, 'leagues', id), {
-                id,
-                name,
-                desc,
-                updatedAtMs: Date.now()
-            }, { merge: true });
-        } catch {
-            alert('Failed to save league to Firebase');
-            return;
-        }
-    } else {
-        leagues.push({id, name, desc});
-        setJSON('leagues', leagues);
-    }
+    leagues.push({id: slugify(name), name, desc});
+    setJSON('leagues', leagues);
     document.getElementById('leagueNameInput').value = '';
     document.getElementById('leagueDescInput').value = '';
-    await renderAllAdminData(true);
+    renderAllAdminData();
 }
 
 function addFixture(){
@@ -2000,18 +888,9 @@ function planFixturesForLeagues(leagueNames, cal, teams){
 
 function populateResultFixtureInputs(){
     const fixtureSel = document.getElementById('resultFixtureInput');
-    const leagueSel = document.getElementById('resultLeagueInput');
     const hint = document.getElementById('resultHint');
-    const selectedLeague = leagueSel?.value || '';
     if(!fixtureSel) return;
-    if(!selectedLeague){
-        fixtureSel.innerHTML = '';
-        if(hint) hint.textContent = 'Select a league first.';
-        return;
-    }
     const fixtures = getJSON('fixtures', [])
-        .filter((f)=> f.league === selectedLeague)
-        .filter((f)=> String(f.status || '').toLowerCase() !== 'abandoned')
         .sort((a,b)=> String(a.date).localeCompare(String(b.date)));
     const prev = fixtureSel.value;
     fixtureSel.innerHTML = '';
@@ -2024,8 +903,8 @@ function populateResultFixtureInputs(){
     }
     if(hint){
         hint.textContent = fixtures.length
-            ? `Select a ${selectedLeague} fixture, add live goal events, save first half or full time, and standings will auto-update.`
-            : `No fixtures available for ${selectedLeague}.`;
+            ? 'Select a fixture, add live goal events, save first half or full time, and standings will auto-update.'
+            : 'No fixtures available yet.';
     }
 }
 
@@ -2341,12 +1220,6 @@ function renderPremierOutcomePreview(){
     const topSixEl = document.getElementById('premierTopSixPreview');
     const relegatedEl = document.getElementById('premierRelegatedPreview');
     if(!topSixEl || !relegatedEl) return;
-    const selectedLeague = document.getElementById('adminTeamLeagueFilter')?.value || '';
-    if(selectedLeague && selectedLeague !== '__all__' && selectedLeague !== 'Umma Premier League'){
-        topSixEl.textContent = '-';
-        relegatedEl.textContent = '-';
-        return;
-    }
     const standings = getPremierStandingsSorted();
     if(standings.length === 0){
         topSixEl.textContent = '-';
@@ -2531,74 +1404,6 @@ function formatYmd(date){
     return `${y}-${m}-${d}`;
 }
 
-function setTeamWeeklyPaymentReview(teamName, weekKey, reviewStatus){
-    const teams = getJSON('teams', []);
-    const idx = teams.findIndex((t)=> t.teamName === teamName);
-    if(idx === -1){
-        alert('Team not found');
-        return;
-    }
-    const targetWeek = collapseSpaces(weekKey || '');
-    if(!targetWeek){
-        alert('Invalid week selected');
-        return;
-    }
-    const nextReview = collapseSpaces(reviewStatus || '');
-    if(!nextReview){
-        alert('Invalid review status');
-        return;
-    }
-
-    const nowMs = Date.now();
-    const team = teams[idx];
-    const latest = team.maintenancePayment && typeof team.maintenancePayment === 'object'
-        ? { ...team.maintenancePayment }
-        : null;
-    const history = Array.isArray(team.maintenancePaymentHistory)
-        ? team.maintenancePaymentHistory.map((row)=> ({ ...row }))
-        : [];
-
-    let updated = false;
-    if(latest && collapseSpaces(latest.weekKey || '') === targetWeek){
-        latest.verificationStatus = nextReview;
-        latest.reviewedAtMs = nowMs;
-        latest.reviewedBy = 'admin';
-        team.maintenancePayment = latest;
-        updated = true;
-    }
-    const nextHistory = history.map((row)=>{
-        if(collapseSpaces(row?.weekKey || '') !== targetWeek) return row;
-        updated = true;
-        return {
-            ...row,
-            verificationStatus: nextReview,
-            reviewedAtMs: nowMs,
-            reviewedBy: 'admin'
-        };
-    });
-    team.maintenancePaymentHistory = nextHistory;
-    if(!updated){
-        alert('Weekly payment record not found for this team.');
-        return;
-    }
-
-    if(nextReview === 'Approved'){
-        team.paymentStatus = 'Paid';
-        if((team.status || '').trim() !== 'Withdrawn' && (team.status || '').trim() !== 'Relegated'){
-            team.status = 'Active';
-        }
-    } else if(nextReview === 'Rejected'){
-        team.paymentStatus = 'Rejected';
-        if((team.status || '').trim() === 'Active'){
-            team.status = 'Pending Payment';
-        }
-    }
-    team.updatedAtMs = nowMs;
-    teams[idx] = team;
-    setJSON('teams', teams);
-    renderAllAdminData();
-}
-
 function updateTeamStatus(teamName, status){
     const teams = getJSON('teams', []);
     const idx = teams.findIndex(t=> t.teamName === teamName);
@@ -2629,41 +1434,6 @@ function markTeamPaid(teamName){
     }
     teams[idx].status = 'Active';
     teams[idx].paymentStatus = Number(teams[idx].feePaid || 0) <= 0 ? 'Free' : 'Paid';
-    teams[idx].paidAt = new Date().toISOString();
-    setJSON('teams', teams);
-    renderAllAdminData();
-}
-
-function makeTeamPayment(teamName){
-    const teams = getJSON('teams', []);
-    const idx = teams.findIndex((t)=> t.teamName === teamName);
-    if(idx === -1){
-        alert('Team not found');
-        return;
-    }
-
-    const currentAmount = Number(teams[idx].feePaid || 0);
-    const amountRaw = prompt(`Enter payment amount for ${teamName}`, String(currentAmount > 0 ? currentAmount : 500));
-    if(amountRaw === null) return;
-    const amount = Number(String(amountRaw).trim());
-    if(!Number.isFinite(amount) || amount < 0){
-        alert('Enter a valid amount');
-        return;
-    }
-
-    const existingRef = String(teams[idx].mpesaRef || '').trim();
-    const refRaw = prompt(`Enter M-Pesa reference for ${teamName}`, existingRef || '');
-    if(refRaw === null) return;
-    const mpesaRef = String(refRaw).trim();
-    if(amount > 0 && !mpesaRef){
-        alert('M-Pesa reference is required for paid teams');
-        return;
-    }
-
-    teams[idx].feePaid = amount;
-    teams[idx].mpesaRef = mpesaRef;
-    teams[idx].status = amount > 0 ? 'Active' : (teams[idx].status || 'Pending Payment');
-    teams[idx].paymentStatus = amount > 0 ? 'Paid' : 'Free';
     teams[idx].paidAt = new Date().toISOString();
     setJSON('teams', teams);
     renderAllAdminData();
