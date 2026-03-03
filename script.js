@@ -916,11 +916,12 @@ function updateRegistrationPaymentUI(){
     const feeNote = document.getElementById('registerFeeNote');
     const mpesaInput = document.getElementById('mpesaRef');
     const requiresMpesa = requiresMpesaRefForLeague(league);
+    const registrationTill = '7312380';
 
     if(feeNote){
         feeNote.textContent = requiresMpesa
-            ? 'Registration Fee: Ksh 500 (M-Pesa reference required)'
-            : 'Registration Fee: Free for Friendly League opening matches (M-Pesa reference not required)';
+            ? `Registration Fee: Ksh 500 (Pay via M-Pesa till ${registrationTill}, then enter reference below)`
+            : `Registration Fee: Free for Friendly League opening matches (Till ${registrationTill} not required for this league)`;
     }
     if(mpesaInput){
         mpesaInput.disabled = !requiresMpesa;

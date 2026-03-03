@@ -45,6 +45,15 @@ body{
   font-weight:600;
 }
 .card{background:var(--card);border-radius:10px;padding:14px;margin:14px 0;box-shadow:0 6px 18px rgba(0,0,0,.06)}
+.ef-payment-banner{
+  margin:0 0 10px;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #f1df9a;
+  background:linear-gradient(90deg, #fff7dc, #fff3c7);
+  color:#4b3200;
+  font-size:14px;
+}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
 .btn{border:none;border-radius:8px;padding:10px 12px;cursor:pointer;font-weight:700;background:var(--gold);color:var(--purple)}

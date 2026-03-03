@@ -136,6 +136,15 @@ body{
 /* Register panel */
 .register-card .form input, .register-card .form select{width:100%;padding:10px;margin:8px 0;border:1px solid #e6e6e6;border-radius:6px}
 .register-card .muted{color:var(--muted);font-size:14px}
+.registration-payment-banner{
+  margin:0 0 10px;
+  padding:10px 12px;
+  border-radius:8px;
+  border:1px solid #f1df9a;
+  background:linear-gradient(90deg, #fff7dc, #fff3c7);
+  color:#4b3200;
+  font-size:14px;
+}
 .simple-table{width:100%;min-width:560px;border-collapse:collapse;margin-top:8px}
 .simple-table th, .simple-table td{padding:8px;border-bottom:1px solid #f0f0f0;text-align:left}
 

@@ -7,6 +7,7 @@ const EF_LEAGUES = [
     { id: "ef-umma-kajiado", name: "Umma Kajiado Cup", fee: 200 },
     { id: "ef-friendly-league", name: "Friendly League", fee: 0 }
 ];
+const EF_PAYMENT_TILL = "7312380";
 
 document.addEventListener("DOMContentLoaded", ()=>{ initEfootball(); });
 
@@ -189,6 +190,7 @@ function bindUi(){
     document.getElementById("efLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efFixturesLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efResultsLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
+    document.getElementById("efLeagueSelect")?.addEventListener("change", updateEfootballRegistrationPaymentUI);
     applyMenuView(currentMenuTarget);
 }
 
@@ -245,6 +247,29 @@ async function ensureLeagues(){
 async function renderLeagueSelects(){
     const leagues = await fetchLeagues();
     applyLeagueOptions(leagues);
+    updateEfootballRegistrationPaymentUI();
+}
+
+function updateEfootballRegistrationPaymentUI(){
+    const league = String(document.getElementById("efLeagueSelect")?.value || "").trim();
+    const feeNote = document.getElementById("efRegisterFeeNote");
+    const mpesaInput = document.getElementById("efMpesaRef");
+    const fee = Number(getLeagueByName(league)?.fee || 0);
+    const requiresMpesa = fee > 0;
+    if(feeNote){
+        feeNote.textContent = requiresMpesa
+            ? `Player registration fee: Ksh ${fee} per league. Pay via M-Pesa till ${EF_PAYMENT_TILL}, then enter reference below.`
+            : `Player registration fee: Free for Friendly League. M-Pesa till ${EF_PAYMENT_TILL} is not required for this league.`;
+    }
+    if(mpesaInput){
+        mpesaInput.disabled = !requiresMpesa;
+        mpesaInput.placeholder = requiresMpesa
+            ? `M-Pesa Reference (after paying till ${EF_PAYMENT_TILL})`
+            : "No M-Pesa reference required for Friendly League";
+        if(!requiresMpesa){
+            mpesaInput.value = "";
+        }
+    }
 }
 
 async function fetchLeagues(){
