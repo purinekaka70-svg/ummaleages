@@ -408,6 +408,7 @@ function bindAdminActions(){
     const awayGoalBtn = document.getElementById('awayGoalBtn');
     const undoGoalBtn = document.getElementById('undoGoalBtn');
     const refreshResultsBtn = document.getElementById('refreshResultsBtn');
+    const resultLeagueInput = document.getElementById('resultLeagueInput');
     const resultFixtureInput = document.getElementById('resultFixtureInput');
     const carryQualifiedBtn = document.getElementById('carryQualifiedBtn');
     const finishPremierBtn = document.getElementById('finishPremierBtn');
@@ -445,6 +446,10 @@ function bindAdminActions(){
     });
     if(fixtureDateInput) fixtureDateInput.addEventListener('change', updateManualDayPreview);
     if(planLeagueInput) planLeagueInput.addEventListener('change', renderPlannerHints);
+    if(resultLeagueInput) resultLeagueInput.addEventListener('change', ()=>{
+        populateResultFixtureInputs();
+        renderResultFixtureContext();
+    });
     if(resultFixtureInput) resultFixtureInput.addEventListener('change', renderResultFixtureContext);
     if(saveResultBtn) saveResultBtn.addEventListener('click', ()=> runButtonAction(saveResultBtn, saveFixtureResult));
     if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', ()=> runButtonAction(saveHalfTimeBtn, saveHalfTimeResult));
@@ -715,6 +720,7 @@ async function renderAllAdminData(forceReload = false){
         populateFixtureInputs();
         renderSemesterCalendarInputs();
         renderPlannerHints();
+        populateResultLeagueInputs();
         populateResultFixtureInputs();
         renderResultFixtureContext();
         renderPremierOutcomePreview();
@@ -976,6 +982,21 @@ function populateFixtureInputs(){
     renderFixtureTeamSuggestions();
 }
 
+function populateResultLeagueInputs(){
+    const leagueSel = document.getElementById('resultLeagueInput');
+    if(!leagueSel) return;
+    const previous = leagueSel.value || '';
+    const leagues = getMergedLeagues();
+    leagueSel.innerHTML = '';
+    leagueSel.appendChild(new Option('Select League', ''));
+    leagues.forEach((l)=> leagueSel.appendChild(new Option(l.name, l.name)));
+    if(previous && leagues.some((l)=> l.name === previous)){
+        leagueSel.value = previous;
+    } else if(!previous && leagues.length){
+        leagueSel.value = leagues[0].name;
+    }
+}
+
 function renderFixtureTeamSuggestions(){
     const league = document.getElementById('fixtureLeagueInput')?.value;
     const list = document.getElementById('fixtureTeamList');
@@ -1210,9 +1231,18 @@ function planFixturesForLeagues(leagueNames, cal, teams){
 
 function populateResultFixtureInputs(){
     const fixtureSel = document.getElementById('resultFixtureInput');
+    const leagueSel = document.getElementById('resultLeagueInput');
     const hint = document.getElementById('resultHint');
+    const selectedLeague = leagueSel?.value || '';
     if(!fixtureSel) return;
+    if(!selectedLeague){
+        fixtureSel.innerHTML = '';
+        if(hint) hint.textContent = 'Select a league first.';
+        return;
+    }
     const fixtures = getJSON('fixtures', [])
+        .filter((f)=> f.league === selectedLeague)
+        .filter((f)=> String(f.status || '').toLowerCase() !== 'abandoned')
         .sort((a,b)=> String(a.date).localeCompare(String(b.date)));
     const prev = fixtureSel.value;
     fixtureSel.innerHTML = '';
@@ -1225,8 +1255,8 @@ function populateResultFixtureInputs(){
     }
     if(hint){
         hint.textContent = fixtures.length
-            ? 'Select a fixture, add live goal events, save first half or full time, and standings will auto-update.'
-            : 'No fixtures available yet.';
+            ? `Select a ${selectedLeague} fixture, add live goal events, save first half or full time, and standings will auto-update.`
+            : `No fixtures available for ${selectedLeague}.`;
     }
 }
 
@@ -1542,6 +1572,12 @@ function renderPremierOutcomePreview(){
     const topSixEl = document.getElementById('premierTopSixPreview');
     const relegatedEl = document.getElementById('premierRelegatedPreview');
     if(!topSixEl || !relegatedEl) return;
+    const selectedLeague = document.getElementById('adminTeamLeagueFilter')?.value || '';
+    if(selectedLeague && selectedLeague !== '__all__' && selectedLeague !== 'Umma Premier League'){
+        topSixEl.textContent = '-';
+        relegatedEl.textContent = '-';
+        return;
+    }
     const standings = getPremierStandingsSorted();
     if(standings.length === 0){
         topSixEl.textContent = '-';

@@ -505,12 +505,12 @@ function bindUI(){
     const homeLink = document.querySelector('.main-nav a[href="#home"]');
     const registerLeagueSelect = document.getElementById('league');
     if(registerBtn) registerBtn.addEventListener('click', registerTeam);
-    if(openRegister) openRegister.addEventListener('click', openRegisterInNewTab);
-    if(heroRegister) heroRegister.addEventListener('click', openRegisterInNewTab);
+    if(openRegister) openRegister.addEventListener('click', openRegisterFast);
+    if(heroRegister) heroRegister.addEventListener('click', openRegisterFast);
     if(navRegister) {
         navRegister.addEventListener('click', (e)=>{
             e.preventDefault();
-            openRegisterInNewTab();
+            openRegisterFast();
         });
     }
     standingsLinks.forEach((link)=>{
@@ -606,6 +606,13 @@ function initRegistrationMetaFields(){
             })
             .catch(err=> console.error('semester calendar fetch failed', err));
     }
+}
+
+function openRegisterFast(){
+    openRegisterPane();
+    const targetUrl = new URL(window.location.href);
+    targetUrl.hash = 'register';
+    window.history.replaceState({}, '', targetUrl.toString());
 }
 
 function openRegisterInNewTab(){
