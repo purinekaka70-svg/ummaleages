@@ -13,6 +13,7 @@ document.addEventListener("DOMContentLoaded", ()=>{ initEfootball(); });
 let currentUser = null;
 let currentPlayer = null;
 let currentLeague = "";
+let currentMenuTarget = "efFixturesSection";
 const EF_COLLECTIONS = {
     leagues: "efootball_leagues",
     fixtures: "efootball_fixtures",
@@ -54,6 +55,7 @@ async function initEfootball(){
                 setRegisterPanelVisible(false);
                 await renderFixtures();
                 await renderStandings();
+                applyMenuView(currentMenuTarget);
                 return;
             }
             await resolveCurrentPlayer();
@@ -65,6 +67,7 @@ async function initEfootball(){
                 setRegisterPanelVisible(true);
                 await renderFixtures();
                 await renderStandings();
+                applyMenuView(currentMenuTarget);
                 return;
             }
             document.getElementById("efLogoutBtn").style.display = "inline-block";
@@ -76,6 +79,7 @@ async function initEfootball(){
             await renderFixtures();
             await renderStandings();
             await renderMyMatches();
+            applyMenuView(currentMenuTarget);
         });
     }
 }
@@ -126,12 +130,7 @@ function bindUi(){
     document.querySelectorAll(".menu-link[data-target]").forEach((btn)=>{
         btn.addEventListener("click", ()=>{
             const target = btn.dataset.target || "";
-            if(target === "efRegisterCard"){
-                setRegisterPanelVisible(true);
-            } else {
-                setRegisterPanelVisible(false);
-                scrollToSection(target);
-            }
+            applyMenuView(target);
             if(menuPanel) menuPanel.classList.remove("open");
         });
     });
@@ -144,14 +143,17 @@ function bindUi(){
         await renderStandings();
         await renderMyMatches();
     });
+    applyMenuView(currentMenuTarget);
 }
 
 function setRegisterPanelVisible(visible){
     const card = document.getElementById("efRegisterCard");
     if(!card) return;
-    card.style.display = visible ? "block" : "none";
     if(visible){
+        applyMenuView("efRegisterCard");
         card.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else if(currentMenuTarget === "efRegisterCard"){
+        applyMenuView("efFixturesSection");
     }
 }
 
@@ -160,6 +162,25 @@ function scrollToSection(id){
     if(section){
         section.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+}
+
+function applyMenuView(target){
+    currentMenuTarget = target || "efFixturesSection";
+    const registerCard = document.getElementById("efRegisterCard");
+    const leagueCard = document.getElementById("efLeagueCard");
+    const fixturesSection = document.getElementById("efFixturesSection");
+    const standingsSection = document.getElementById("efStandingsSection");
+    const myMatchesCard = document.getElementById("efMyMatchesCard");
+
+    const showRegister = currentMenuTarget === "efRegisterCard";
+    const showFixtures = currentMenuTarget === "efFixturesSection";
+    const showStandings = currentMenuTarget === "efStandingsSection";
+
+    if(registerCard) registerCard.style.display = showRegister ? "block" : "none";
+    if(leagueCard) leagueCard.style.display = showRegister ? "none" : "block";
+    if(fixturesSection) fixturesSection.style.display = showFixtures ? "block" : "none";
+    if(standingsSection) standingsSection.style.display = showStandings ? "block" : "none";
+    if(myMatchesCard) myMatchesCard.style.display = (showFixtures && currentPlayer) ? "block" : "none";
 }
 
 async function ensureLeagues(){
