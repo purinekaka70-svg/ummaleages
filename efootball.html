@@ -10,16 +10,25 @@
 <body>
     <header class="ef-header">
         <div class="container row">
-            <div class="brand">E-Football</div>
+            <div class="left">
+                <button id="efMenuBtn" class="menu-btn" type="button" aria-label="Open menu">&#9776;</button>
+                <div class="brand">E-Football</div>
+            </div>
             <div class="actions">
                 <a href="index.html" class="btn btn-outline">Back To Main Site</a>
+                <button id="efOpenRegisterBtn" class="btn btn-outline">Register / Login</button>
                 <button id="efLogoutBtn" class="btn btn-outline" style="display:none">Logout</button>
             </div>
         </div>
+        <nav id="efMenuPanel" class="menu-panel">
+            <button type="button" class="menu-link" data-target="efFixturesSection">Fixtures</button>
+            <button type="button" class="menu-link" data-target="efStandingsSection">Standings</button>
+            <button type="button" class="menu-link" data-target="efRegisterCard">Register / Login</button>
+        </nav>
     </header>
 
     <main class="container">
-        <section class="card">
+        <section id="efRegisterCard" class="card" style="display:none">
             <h2>E-Football Registration</h2>
             <p class="muted">Player registration fee: <strong>Ksh 200</strong> per league.</p>
             <div class="grid">
@@ -41,7 +50,7 @@
             <div id="efAccountInfo" class="muted"></div>
         </section>
 
-        <section class="card">
+        <section id="efLeagueCard" class="card">
             <h3>Leagues</h3>
             <div class="row-wrap">
                 <label for="efLeagueView"><strong>League:</strong></label>
@@ -49,7 +58,7 @@
             </div>
         </section>
 
-        <section class="card">
+        <section id="efFixturesSection" class="card">
             <h3>Fixtures</h3>
             <table class="table">
                 <thead>
@@ -59,7 +68,7 @@
             </table>
         </section>
 
-        <section class="card">
+        <section id="efStandingsSection" class="card">
             <h3>Standings</h3>
             <table class="table">
                 <thead>

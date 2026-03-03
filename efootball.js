@@ -37,6 +37,7 @@ async function initEfootball(){
     bindUi();
     await ensureLeagues();
     await renderLeagueSelects();
+    setRegisterPanelVisible(false);
 
     if(window.ummaAuth?.onAuthStateChanged){
         window.ummaAuth.onAuthStateChanged(async (user)=>{
@@ -44,16 +45,30 @@ async function initEfootball(){
             if(!currentUser){
                 currentPlayer = null;
                 document.getElementById("efLogoutBtn").style.display = "none";
+                document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
                 document.getElementById("efAccountCard").style.display = "none";
                 document.getElementById("efMyMatchesCard").style.display = "none";
+                setRegisterPanelVisible(false);
                 await renderFixtures();
                 await renderStandings();
                 return;
             }
             await resolveCurrentPlayer();
+            if(!currentPlayer){
+                document.getElementById("efLogoutBtn").style.display = "inline-block";
+                document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
+                document.getElementById("efAccountCard").style.display = "none";
+                document.getElementById("efMyMatchesCard").style.display = "none";
+                setRegisterPanelVisible(true);
+                await renderFixtures();
+                await renderStandings();
+                return;
+            }
             document.getElementById("efLogoutBtn").style.display = "inline-block";
-            document.getElementById("efAccountCard").style.display = "block";
+            document.getElementById("efOpenRegisterBtn").style.display = "none";
+            document.getElementById("efAccountCard").style.display = "none";
             document.getElementById("efMyMatchesCard").style.display = "block";
+            setRegisterPanelVisible(false);
             await renderAccount();
             await renderFixtures();
             await renderStandings();
@@ -63,8 +78,29 @@ async function initEfootball(){
 }
 
 function bindUi(){
+    const menuBtn = document.getElementById("efMenuBtn");
+    const menuPanel = document.getElementById("efMenuPanel");
+    const openRegisterBtn = document.getElementById("efOpenRegisterBtn");
     document.getElementById("efRegisterBtn")?.addEventListener("click", registerPlayer);
     document.getElementById("efLoginBtn")?.addEventListener("click", loginPlayer);
+    if(openRegisterBtn){
+        openRegisterBtn.addEventListener("click", ()=> setRegisterPanelVisible(true));
+    }
+    if(menuBtn && menuPanel){
+        menuBtn.addEventListener("click", ()=> menuPanel.classList.toggle("open"));
+    }
+    document.querySelectorAll(".menu-link[data-target]").forEach((btn)=>{
+        btn.addEventListener("click", ()=>{
+            const target = btn.dataset.target || "";
+            if(target === "efRegisterCard"){
+                setRegisterPanelVisible(true);
+            } else {
+                setRegisterPanelVisible(false);
+                scrollToSection(target);
+            }
+            if(menuPanel) menuPanel.classList.remove("open");
+        });
+    });
     document.getElementById("efLogoutBtn")?.addEventListener("click", async ()=>{
         try{ await window.ummaAuth.logoutAuthUser(); } catch {}
     });
@@ -74,6 +110,22 @@ function bindUi(){
         await renderStandings();
         await renderMyMatches();
     });
+}
+
+function setRegisterPanelVisible(visible){
+    const card = document.getElementById("efRegisterCard");
+    if(!card) return;
+    card.style.display = visible ? "block" : "none";
+    if(visible){
+        card.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+}
+
+function scrollToSection(id){
+    const section = document.getElementById(id);
+    if(section){
+        section.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
 }
 
 async function ensureLeagues(){

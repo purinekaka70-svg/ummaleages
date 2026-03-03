@@ -14,9 +14,34 @@ body{
 }
 .container{max-width:1080px;margin:0 auto;padding:0 16px}
 .ef-header{background:#102a56;color:#fff}
+.left{display:flex;align-items:center;gap:10px}
+.menu-btn{
+  border:1px solid rgba(255,255,255,.45);
+  background:transparent;
+  color:#fff;
+  border-radius:8px;
+  width:36px;
+  height:36px;
+  cursor:pointer;
+}
 .row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 0}
 .brand{font-weight:700;font-size:22px}
 .actions{display:flex;gap:8px;flex-wrap:wrap}
+.menu-panel{
+  display:none;
+  gap:8px;
+  padding:0 16px 12px;
+}
+.menu-panel.open{display:flex;flex-wrap:wrap}
+.menu-link{
+  border:1px solid rgba(255,255,255,.45);
+  background:transparent;
+  color:#fff;
+  border-radius:8px;
+  padding:8px 10px;
+  cursor:pointer;
+  font-weight:600;
+}
 .card{background:var(--card);border-radius:10px;padding:14px;margin:14px 0;box-shadow:0 6px 18px rgba(0,0,0,.06)}
 .grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
@@ -32,4 +57,6 @@ input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
 @media(max-width:700px){
   .grid{grid-template-columns:1fr}
   .table{min-width:560px}
+  .actions{width:100%}
+  .actions .btn{flex:1}
 }
