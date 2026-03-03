@@ -135,6 +135,22 @@ input,select{
   margin-right:6px;
 }
 .club-panel h3{margin-top:0}
+.payment-banner{
+  border-left:4px solid var(--gold);
+}
+.payment-banner h3{
+  margin:0 0 8px;
+}
+.lock-note{
+  margin:0;
+  font-weight:700;
+  color:#9c1c1c;
+}
+.section-divider{
+  border:none;
+  border-top:1px solid #ece6fa;
+  margin:16px 0;
+}
 
 @media(max-width:780px){
   .header-inner{align-items:flex-start;flex-wrap:wrap}

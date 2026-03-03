@@ -5,6 +5,9 @@ document.addEventListener("DOMContentLoaded", ()=>{ initClubPortal(); });
 let currentUser = null;
 let currentTeam = null;
 let currentLeagueView = "";
+let portalLockedForPayment = true;
+const WEEKLY_MAINTENANCE_TILL = "7312380";
+const WEEKLY_MAINTENANCE_AMOUNT = 200;
 const CLUB_CACHE_TTL_MS = 5000;
 const clubCache = {
     fixtures: { team: "", data: [], expiresAt: 0, inFlight: null },
@@ -105,6 +108,11 @@ function clearCurrentClub(){
 }
 
 function openClubSection(sectionId){
+    if(portalLockedForPayment && sectionId !== "clubProfileSection"){
+        setText("clubPortalLockNotice", `Portal locked: pay KES ${WEEKLY_MAINTENANCE_AMOUNT} and submit M-Pesa reference for this week to continue.`);
+        alert("Portal locked for weekly maintenance payment. Submit M-Pesa reference first.");
+        sectionId = "clubProfileSection";
+    }
     const sections = document.querySelectorAll(".club-panel");
     const links = document.querySelectorAll(".menu-link[data-target]");
     sections.forEach((section)=>{
@@ -137,6 +145,54 @@ function getCurrentWeekLabel(){
     return `Week ${week}`;
 }
 
+function getCurrentWeekKey(){
+    const now = new Date();
+    const onejan = new Date(now.getFullYear(), 0, 1);
+    const week = Math.ceil((((now - onejan) / 86400000) + onejan.getDay() + 1) / 7);
+    return `${now.getFullYear()}-W${String(week).padStart(2, "0")}`;
+}
+
+function isWeeklyPaymentValid(team){
+    const payment = team?.maintenancePayment || {};
+    const weekKey = getCurrentWeekKey();
+    const ref = collapseSpaces(payment.mpesaRef || "");
+    return Boolean(ref) && payment.weekKey === weekKey;
+}
+
+function applyPortalLockState(){
+    const lockText = portalLockedForPayment
+        ? `Portal locked until weekly payment is submitted. Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to till ${WEEKLY_MAINTENANCE_TILL}.`
+        : `Payment submitted for this week. Portal unlocked.`;
+    setText("clubPortalLockNotice", lockText);
+    const links = document.querySelectorAll(".menu-link[data-target]");
+    links.forEach((btn)=>{
+        const isProfile = btn.dataset.target === "clubProfileSection";
+        btn.disabled = portalLockedForPayment && !isProfile;
+        btn.title = portalLockedForPayment && !isProfile ? "Complete weekly payment to unlock this section." : "";
+    });
+}
+
+function renderWeeklyPaymentStatus(team){
+    const payment = team?.maintenancePayment || {};
+    const statusEl = document.getElementById("weeklyPaymentStatus");
+    const input = document.getElementById("weeklyMpesaRefInput");
+    if(!statusEl) return;
+
+    if(isWeeklyPaymentValid(team)){
+        const submitted = payment.submittedAtMs ? new Date(payment.submittedAtMs).toLocaleString() : "recently";
+        statusEl.textContent = `Submitted for ${payment.weekLabel || getCurrentWeekLabel()} with ref ${payment.mpesaRef} (${submitted}).`;
+        if(input) input.value = "";
+        return;
+    }
+    statusEl.textContent = `No valid payment for ${getCurrentWeekLabel()}. Submit your M-Pesa reference to unlock all sections.`;
+}
+
+function ensurePortalUnlocked(){
+    if(!portalLockedForPayment) return true;
+    alert(`Portal locked. Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to till ${WEEKLY_MAINTENANCE_TILL} and submit M-Pesa reference first.`);
+    return false;
+}
+
 async function initClubPortal(){
     bindClubEvents();
     if(!window.ummaAuth?.onAuthStateChanged){
@@ -166,6 +222,7 @@ function bindClubEvents(){
     const menuBtn = document.getElementById("clubHamburgerBtn");
     const menuPanel = document.getElementById("clubMenuPanel");
     const menuLinks = document.querySelectorAll(".menu-link[data-target]");
+    const submitWeeklyPaymentBtn = document.getElementById("submitWeeklyPaymentBtn");
 
     if(logoutBtn){
         logoutBtn.addEventListener("click", async ()=>{
@@ -178,6 +235,7 @@ function bindClubEvents(){
     if(addPlayerBtn) addPlayerBtn.addEventListener("click", addPlayer);
     if(saveSotwBtn) saveSotwBtn.addEventListener("click", saveSquadOfWeek);
     if(postMatchSquadBtn) postMatchSquadBtn.addEventListener("click", postMatchSquad);
+    if(submitWeeklyPaymentBtn) submitWeeklyPaymentBtn.addEventListener("click", submitWeeklyPayment);
     if(leagueViewSelect){
         leagueViewSelect.addEventListener("change", async ()=>{
             currentLeagueView = leagueViewSelect.value || "";
@@ -234,9 +292,14 @@ async function renderClubPortal(){
         currentTeam = { id: teamDoc.id, ...teamDoc.data() };
         currentLeagueView = currentTeam.league || "";
         setCurrentClub(currentTeam.teamName || currentTeam.name || "");
+        portalLockedForPayment = !isWeeklyPaymentValid(currentTeam);
 
         document.getElementById("clubAuthNotice").style.display = "none";
         document.getElementById("clubPortalApp").style.display = "block";
+        setText("clubTillNumberTop", WEEKLY_MAINTENANCE_TILL);
+        setText("clubPaymentNoticeText", `All registered clubs must pay KES ${WEEKLY_MAINTENANCE_AMOUNT} weekly maintenance every Saturday to keep portal access active.`);
+        applyPortalLockState();
+        renderWeeklyPaymentStatus(currentTeam);
         openClubSection("clubProfileSection");
 
         setText("clubNameHeading", currentTeam.teamName || currentTeam.name || "Club");
@@ -287,6 +350,7 @@ async function renderLeagueViewSelect(team){
 }
 
 async function saveClubInfo(){
+    if(!ensurePortalUnlocked()) return;
     if(!currentTeam?.id) return;
     const coach = collapseSpaces(document.getElementById("clubCoachInput")?.value || "");
     const phone = collapseSpaces(document.getElementById("clubPhoneInput")?.value || "");
@@ -321,6 +385,7 @@ async function renderPlayers(){
 }
 
 async function addPlayer(){
+    if(!ensurePortalUnlocked()) return;
     const clubName = getCurrentClub();
     const input = document.getElementById("newPlayerInput");
     const playerName = collapseSpaces(input?.value || "");
@@ -346,6 +411,7 @@ async function addPlayer(){
 }
 
 async function removePlayer(playerName){
+    if(!ensurePortalUnlocked()) return;
     const clubName = getCurrentClub();
     if(!clubName) return;
     const id = `${slug(clubName)}__${slug(playerName)}`;
@@ -419,6 +485,7 @@ function getSelectedFixtureId(){
 }
 
 async function saveSquadOfWeek(){
+    if(!ensurePortalUnlocked()) return;
     const fixtureId = getSelectedFixtureId();
     const starters = getSelectedStarters();
     const subs = parseSubs(document.getElementById("squadSubsInput")?.value || "");
@@ -446,8 +513,53 @@ async function saveSquadOfWeek(){
 }
 
 async function postMatchSquad(){
+    if(!ensurePortalUnlocked()) return;
     await saveSquadOfWeek();
     await renderClubFixtures();
+}
+
+async function submitWeeklyPayment(){
+    if(!currentTeam?.id) return;
+    const input = document.getElementById("weeklyMpesaRefInput");
+    const mpesaRef = collapseSpaces(input?.value || "");
+    if(!mpesaRef) return alert("Enter M-Pesa reference.");
+
+    const weekKey = getCurrentWeekKey();
+    const payment = {
+        weekKey,
+        weekLabel: getCurrentWeekLabel(),
+        amount: WEEKLY_MAINTENANCE_AMOUNT,
+        tillNumber: WEEKLY_MAINTENANCE_TILL,
+        mpesaRef,
+        submittedAtMs: Date.now(),
+        verificationStatus: "Pending Verification"
+    };
+    try{
+        const existingHistory = Array.isArray(currentTeam.maintenancePaymentHistory)
+            ? currentTeam.maintenancePaymentHistory
+            : [];
+        const filteredHistory = existingHistory.filter((row)=> String(row?.weekKey || "") !== weekKey);
+        const maintenancePaymentHistory = [payment, ...filteredHistory]
+            .sort((a,b)=> Number(b?.submittedAtMs || 0) - Number(a?.submittedAtMs || 0))
+            .slice(0, 20);
+        await setDoc(doc(window.ummaFire.db, "teams", currentTeam.id), {
+            maintenancePayment: payment,
+            maintenancePaymentHistory,
+            paymentStatus: "Pending Verification",
+            updatedAtMs: Date.now()
+        }, { merge: true });
+        currentTeam.maintenancePayment = payment;
+        currentTeam.maintenancePaymentHistory = maintenancePaymentHistory;
+        currentTeam.paymentStatus = "Pending Verification";
+        portalLockedForPayment = false;
+        setText("clubPayment", getPaymentLabel(currentTeam));
+        applyPortalLockState();
+        renderWeeklyPaymentStatus(currentTeam);
+        alert("Weekly payment reference submitted. Portal unlocked.");
+    } catch(err){
+        console.error("submitWeeklyPayment error", err);
+        alert("Failed to submit payment reference.");
+    }
 }
 
 async function renderClubFixtures(){

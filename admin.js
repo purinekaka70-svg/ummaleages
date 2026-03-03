@@ -241,7 +241,9 @@ function normalizeTeamRow(team){
         coachName: team.coachName || '',
         phone: team.phone || '',
         feePaid: Number(team.feePaid || 0),
-        paymentStatus: team.paymentStatus || ''
+        paymentStatus: team.paymentStatus || '',
+        maintenancePayment: team.maintenancePayment && typeof team.maintenancePayment === 'object' ? team.maintenancePayment : null,
+        maintenancePaymentHistory: Array.isArray(team.maintenancePaymentHistory) ? team.maintenancePaymentHistory : []
     };
 }
 
@@ -550,6 +552,7 @@ function bindAdminActions(){
     const finishPremierBtn = document.getElementById('finishPremierBtn');
     const teamsBody = document.getElementById('adminTeamsBody');
     const allTeamsBody = document.getElementById('adminAllTeamsBody');
+    const weeklyPaymentsBody = document.getElementById('adminWeeklyPaymentsBody');
     const leaguesBody = document.getElementById('adminLeaguesBody');
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
@@ -606,6 +609,7 @@ function bindAdminActions(){
     if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', ()=>{
         renderTeamTable();
         renderAllTeamsManagementTable();
+        renderWeeklyPaymentsTable();
     });
     if(efLeagueFilter) efLeagueFilter.addEventListener('change', renderEfootballAdminData);
     if(refreshEfootballBtn) refreshEfootballBtn.addEventListener('click', ()=> runButtonAction(refreshEfootballBtn, ()=> renderAllAdminData(true)));
@@ -667,6 +671,24 @@ function bindAdminActions(){
             }
             if(action === 'all-delete'){
                 runButtonAction(btn, ()=> deleteTeam(teamName));
+            }
+        });
+    }
+
+    if(weeklyPaymentsBody){
+        weeklyPaymentsBody.addEventListener('click', (e)=>{
+            const btn = e.target.closest('button[data-action]');
+            if(!btn) return;
+            const teamName = btn.dataset.team;
+            const weekKey = btn.dataset.weekKey;
+            const action = btn.dataset.action;
+            if(!teamName || !weekKey || !action) return;
+            if(action === 'approve-weekly-payment'){
+                runButtonAction(btn, ()=> setTeamWeeklyPaymentReview(teamName, weekKey, 'Approved'));
+                return;
+            }
+            if(action === 'reject-weekly-payment'){
+                runButtonAction(btn, ()=> setTeamWeeklyPaymentReview(teamName, weekKey, 'Rejected'));
             }
         });
     }
@@ -888,6 +910,7 @@ async function renderAllAdminData(forceReload = false){
         renderTeamsByLeagueDirectory();
         renderAllTeamsManagementTable();
         renderTeamTable();
+        renderWeeklyPaymentsTable();
         renderEfootballAdminData();
         renderFixtureTable();
         populateFixtureInputs();
@@ -1060,6 +1083,7 @@ function setTeamLeagueFilter(league){
     }
     renderTeamTable();
     renderAllTeamsManagementTable();
+    renderWeeklyPaymentsTable();
 }
 
 function getMergedEfootballLeagues(){
@@ -1577,6 +1601,108 @@ function renderTeamTable(){
         `;
         body.appendChild(tr);
     });
+}
+
+function getTeamMaintenanceRecords(team){
+    const fromHistory = Array.isArray(team?.maintenancePaymentHistory)
+        ? team.maintenancePaymentHistory.filter((row)=> row && typeof row === 'object')
+        : [];
+    const latest = team?.maintenancePayment && typeof team.maintenancePayment === 'object'
+        ? [team.maintenancePayment]
+        : [];
+    const merged = [...latest, ...fromHistory];
+    const byWeek = new Map();
+    merged.forEach((row)=>{
+        const weekKey = collapseSpaces(row.weekKey || '');
+        const mpesaRef = collapseSpaces(row.mpesaRef || '');
+        if(!weekKey || !mpesaRef) return;
+        const prev = byWeek.get(weekKey);
+        if(!prev || Number(row.submittedAtMs || 0) >= Number(prev.submittedAtMs || 0)){
+            byWeek.set(weekKey, {
+                weekKey,
+                weekLabel: collapseSpaces(row.weekLabel || weekKey),
+                mpesaRef,
+                submittedAtMs: Number(row.submittedAtMs || 0),
+                verificationStatus: collapseSpaces(row.verificationStatus || ''),
+                reviewedAtMs: Number(row.reviewedAtMs || 0)
+            });
+        }
+    });
+    return [...byWeek.values()].sort((a,b)=> Number(b.submittedAtMs || 0) - Number(a.submittedAtMs || 0));
+}
+
+function getWeeklyReviewText(record){
+    const review = collapseSpaces(record?.verificationStatus || '');
+    if(review) return review;
+    return 'Pending Verification';
+}
+
+function formatDateTime(value){
+    const ms = Number(value || 0);
+    if(!Number.isFinite(ms) || ms <= 0) return '-';
+    return new Date(ms).toLocaleString();
+}
+
+function renderWeeklyPaymentsTable(){
+    const body = document.getElementById('adminWeeklyPaymentsBody');
+    if(!body) return;
+    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
+    const teams = getJSON('teams', [])
+        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter))
+        .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.teamName || '').localeCompare(String(b.teamName || '')));
+
+    body.innerHTML = '';
+    if(!leagueFilter){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="9" class="muted">Select a league to view weekly payments.</td>';
+        body.appendChild(tr);
+        return;
+    }
+    if(teams.length === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="9" class="muted">No teams found for selected league.</td>';
+        body.appendChild(tr);
+        return;
+    }
+
+    let rowsAdded = 0;
+    teams.forEach((team)=>{
+        const records = getTeamMaintenanceRecords(team);
+        if(records.length === 0) return;
+        const latest = records[0];
+        const submittedAtText = formatDateTime(latest.submittedAtMs);
+        const reviewedAtText = formatDateTime(latest.reviewedAtMs);
+        const historyText = records.slice(0, 4)
+            .map((row)=> `${row.weekLabel}: ${row.mpesaRef} [${formatDateTime(row.submittedAtMs)}] (${getWeeklyReviewText(row)}${row.reviewedAtMs ? ` @ ${formatDateTime(row.reviewedAtMs)}` : ''})`)
+            .join(' | ');
+        const reviewText = getWeeklyReviewText(latest);
+        const disableApprove = reviewText === 'Approved';
+        const disableReject = reviewText === 'Rejected';
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHTML(team.teamName || '-')}</td>
+            <td>${escapeHTML(team.league || '-')}</td>
+            <td>${escapeHTML(latest.weekLabel || latest.weekKey || '-')}</td>
+            <td>${escapeHTML(latest.mpesaRef || '-')}</td>
+            <td>${escapeHTML(submittedAtText)}</td>
+            <td>${escapeHTML(reviewText)}</td>
+            <td>${escapeHTML(reviewedAtText)}</td>
+            <td>${escapeHTML(historyText || '-')}</td>
+            <td>
+                <button class="btn btn-primary" data-action="approve-weekly-payment" data-team="${escapeAttr(team.teamName)}" data-week-key="${escapeAttr(latest.weekKey)}" ${disableApprove ? 'disabled' : ''}>Approve</button>
+                <button class="btn btn-outline" data-action="reject-weekly-payment" data-team="${escapeAttr(team.teamName)}" data-week-key="${escapeAttr(latest.weekKey)}" ${disableReject ? 'disabled' : ''}>Reject</button>
+            </td>
+        `;
+        body.appendChild(tr);
+        rowsAdded += 1;
+    });
+
+    if(rowsAdded === 0){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="9" class="muted">No weekly payment submissions yet in selected league.</td>';
+        body.appendChild(tr);
+    }
 }
 
 function renderFixtureTable(){
@@ -2403,6 +2529,74 @@ function formatYmd(date){
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const d = String(date.getDate()).padStart(2, '0');
     return `${y}-${m}-${d}`;
+}
+
+function setTeamWeeklyPaymentReview(teamName, weekKey, reviewStatus){
+    const teams = getJSON('teams', []);
+    const idx = teams.findIndex((t)=> t.teamName === teamName);
+    if(idx === -1){
+        alert('Team not found');
+        return;
+    }
+    const targetWeek = collapseSpaces(weekKey || '');
+    if(!targetWeek){
+        alert('Invalid week selected');
+        return;
+    }
+    const nextReview = collapseSpaces(reviewStatus || '');
+    if(!nextReview){
+        alert('Invalid review status');
+        return;
+    }
+
+    const nowMs = Date.now();
+    const team = teams[idx];
+    const latest = team.maintenancePayment && typeof team.maintenancePayment === 'object'
+        ? { ...team.maintenancePayment }
+        : null;
+    const history = Array.isArray(team.maintenancePaymentHistory)
+        ? team.maintenancePaymentHistory.map((row)=> ({ ...row }))
+        : [];
+
+    let updated = false;
+    if(latest && collapseSpaces(latest.weekKey || '') === targetWeek){
+        latest.verificationStatus = nextReview;
+        latest.reviewedAtMs = nowMs;
+        latest.reviewedBy = 'admin';
+        team.maintenancePayment = latest;
+        updated = true;
+    }
+    const nextHistory = history.map((row)=>{
+        if(collapseSpaces(row?.weekKey || '') !== targetWeek) return row;
+        updated = true;
+        return {
+            ...row,
+            verificationStatus: nextReview,
+            reviewedAtMs: nowMs,
+            reviewedBy: 'admin'
+        };
+    });
+    team.maintenancePaymentHistory = nextHistory;
+    if(!updated){
+        alert('Weekly payment record not found for this team.');
+        return;
+    }
+
+    if(nextReview === 'Approved'){
+        team.paymentStatus = 'Paid';
+        if((team.status || '').trim() !== 'Withdrawn' && (team.status || '').trim() !== 'Relegated'){
+            team.status = 'Active';
+        }
+    } else if(nextReview === 'Rejected'){
+        team.paymentStatus = 'Rejected';
+        if((team.status || '').trim() === 'Active'){
+            team.status = 'Pending Payment';
+        }
+    }
+    team.updatedAtMs = nowMs;
+    teams[idx] = team;
+    setJSON('teams', teams);
+    renderAllAdminData();
 }
 
 function updateTeamStatus(teamName, status){

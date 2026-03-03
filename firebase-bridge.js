@@ -158,6 +158,7 @@ async function mirrorCollectionsFromState(){
       return setDoc(doc(db,"teams",teamId),{
         id: teamId,
         name: t.teamName||"",
+        teamName: t.teamName||"",
         leagueId,
         league: t.league||"",
         ownerUid: t.ownerUid||null,
@@ -167,6 +168,8 @@ async function mirrorCollectionsFromState(){
         paymentStatus: t.paymentStatus||"",
         mpesaRef: t.mpesaRef||"",
         feePaid: Number(t.feePaid||0),
+        maintenancePayment: t.maintenancePayment && typeof t.maintenancePayment === "object" ? t.maintenancePayment : null,
+        maintenancePaymentHistory: Array.isArray(t.maintenancePaymentHistory) ? t.maintenancePaymentHistory : [],
         updatedAtMs: Date.now()
       },{merge:true});
     }));
