@@ -109,10 +109,6 @@ function clearCurrentClub(){
 }
 
 function openClubSection(sectionId){
-    if(portalLockedForPayment && sectionId !== "clubProfileSection"){
-        setText("clubPortalLockNotice", `Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to Till ${WEEKLY_MAINTENANCE_TILL}. Enter M-Pesa ref to unlock.`);
-        sectionId = "clubProfileSection";
-    }
     const sections = document.querySelectorAll(".club-panel");
     const links = document.querySelectorAll(".menu-link[data-target]");
     const paymentBanner = document.getElementById("clubPaymentBanner");
