@@ -41,14 +41,16 @@ body{
   cursor:pointer;
   font-size:18px;
   line-height:1;
-  display:none;
+  display:block;
 }
 .club-menu{
-  display:flex;
+  display:none;
   border-top:1px solid rgba(255,255,255,0.15);
   padding:10px 16px 12px;
   gap:8px;
   flex-wrap:wrap;
+  width:100%;
+  flex-direction:column;
 }
 .club-menu.open{display:flex}
 .menu-link{
@@ -168,13 +170,10 @@ input,select{
 }
 
 @media(max-width:900px){
-  .hamburger{display:block}
-  .club-menu{display:none}
-  .club-menu.open{display:flex}
-  .club-menu{width:100%;flex-direction:column}
   .club-menu{padding:10px 12px 12px}
-  .menu-link{width:100%;text-align:left}
 }
+
+.menu-link{width:100%;text-align:left}
 
 @media(max-width:640px){
   .header-actions{grid-template-columns:1fr}

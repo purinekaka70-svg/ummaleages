@@ -8,7 +8,6 @@ let currentLeagueView = "";
 let portalLockedForPayment = true;
 const WEEKLY_MAINTENANCE_TILL = "7312380";
 const WEEKLY_MAINTENANCE_AMOUNT = 200;
-const MOBILE_MENU_MAX_WIDTH = 900;
 const CLUB_CACHE_TTL_MS = 5000;
 const clubCache = {
     fixtures: { team: "", data: [], expiresAt: 0, inFlight: null },
@@ -247,44 +246,25 @@ function bindClubEvents(){
         });
     }
     if(menuBtn && menuPanel){
-        const mobileQuery = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`);
-        const closeMobileMenu = ()=>{
+        const closeMenu = ()=>{
             menuPanel.classList.remove("open");
             menuBtn.setAttribute("aria-expanded", "false");
         };
-        const syncMenuState = ()=>{
-            const isMobile = mobileQuery.matches;
-            if(!isMobile){
-                menuPanel.classList.add("open");
-                menuBtn.setAttribute("aria-expanded", "true");
-                return;
-            }
-            closeMobileMenu();
-        };
-        syncMenuState();
-        if(typeof mobileQuery.addEventListener === "function"){
-            mobileQuery.addEventListener("change", syncMenuState);
-        } else if(typeof mobileQuery.addListener === "function"){
-            mobileQuery.addListener(syncMenuState);
-        }
-        window.addEventListener("resize", syncMenuState);
-        window.addEventListener("orientationchange", syncMenuState);
+        closeMenu();
         menuBtn.addEventListener("click", ()=>{
-            if(!mobileQuery.matches) return;
             const opened = menuPanel.classList.toggle("open");
             menuBtn.setAttribute("aria-expanded", opened ? "true" : "false");
         });
         document.addEventListener("click", (event)=>{
-            if(!mobileQuery.matches || !menuPanel.classList.contains("open")) return;
+            if(!menuPanel.classList.contains("open")) return;
             if(menuPanel.contains(event.target) || menuBtn.contains(event.target)) return;
-            closeMobileMenu();
+            closeMenu();
         });
     }
     menuLinks.forEach((btn)=>{
         btn.addEventListener("click", ()=>{
             openClubSection(btn.dataset.target);
-            const isMobile = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`).matches;
-            if(menuPanel && menuBtn && isMobile){
+            if(menuPanel && menuBtn){
                 menuPanel.classList.remove("open");
                 menuBtn.setAttribute("aria-expanded", "false");
             }
