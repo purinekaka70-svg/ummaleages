@@ -59,7 +59,6 @@ async function initEfootball(){
                 document.getElementById("efOpenLoginBtn").style.display = "inline-block";
                 document.getElementById("efAccountCard").style.display = "none";
                 document.getElementById("efMyMatchesCard").style.display = "none";
-                closeLoginModal();
                 setAuthPanelVisible("");
                 await renderFixtures();
                 await renderResults();
@@ -74,7 +73,6 @@ async function initEfootball(){
                 document.getElementById("efOpenLoginBtn").style.display = "inline-block";
                 document.getElementById("efAccountCard").style.display = "none";
                 document.getElementById("efMyMatchesCard").style.display = "none";
-                closeLoginModal();
                 setAuthPanelVisible("efRegisterCard");
                 await renderFixtures();
                 await renderResults();
