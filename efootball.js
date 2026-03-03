@@ -42,7 +42,7 @@ async function initEfootball(){
     applyLeagueOptions(EF_LEAGUES);
     await ensureLeagues();
     await renderLeagueSelects();
-    setRegisterPanelVisible(false);
+    setRegisterPanelVisible(shouldOpenAuthPanelFromHash());
 
     if(window.ummaAuth?.onAuthStateChanged){
         window.ummaAuth.onAuthStateChanged(async (user)=>{
@@ -86,6 +86,11 @@ async function initEfootball(){
             applyMenuView(currentMenuTarget);
         });
     }
+}
+
+function shouldOpenAuthPanelFromHash(){
+    const hash = String(window.location.hash || "").toLowerCase();
+    return hash === "#login" || hash === "#register" || hash === "#eflogin" || hash === "#efregister";
 }
 
 function applyLeagueOptions(leagues){
