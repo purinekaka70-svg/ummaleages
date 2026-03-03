@@ -6,6 +6,8 @@ const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || (window.__UMMA_DB__ = {});
 const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
+let adminRefreshTimer = null;
+const adminWindowFocusRefresh = ()=>{ renderAllAdminData(true); };
 
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
@@ -204,17 +206,32 @@ async function hydrateAdminCollectionsFromFirestore(){
 }
 
 async function syncAdminFromFirebase(forceReload = false){
-    if(!window.ummaRemoteStore) return;
     try{
-        const loader = forceReload && window.ummaRemoteStore.reloadState
-            ? window.ummaRemoteStore.reloadState
-            : window.ummaRemoteStore.loadState;
-        const remote = await loader();
-        applyRemoteState(remote || {});
+        if(window.ummaRemoteStore){
+            const loader = forceReload && window.ummaRemoteStore.reloadState
+                ? window.ummaRemoteStore.reloadState
+                : window.ummaRemoteStore.loadState;
+            const remote = await loader();
+            applyRemoteState(remote || {});
+        }
         await hydrateAdminCollectionsFromFirestore();
     } catch {
         // Keep currently loaded memory state if refresh fails.
     }
+}
+
+function startAdminLiveRefresh(){
+    stopAdminLiveRefresh();
+    adminRefreshTimer = setInterval(adminWindowFocusRefresh, 7000);
+    window.addEventListener('focus', adminWindowFocusRefresh);
+}
+
+function stopAdminLiveRefresh(){
+    if(adminRefreshTimer){
+        clearInterval(adminRefreshTimer);
+        adminRefreshTimer = null;
+    }
+    window.removeEventListener('focus', adminWindowFocusRefresh);
 }
 
 function startRemoteSubscription(){
@@ -406,8 +423,11 @@ function hydrateAdminView(){
         if(!authed) menuPanel.classList.remove('open');
     }
     if(authed){
+        startAdminLiveRefresh();
         renderAllAdminData();
         openAdminSection('dashboardSection');
+    } else {
+        stopAdminLiveRefresh();
     }
 }
 
