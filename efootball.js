@@ -42,7 +42,7 @@ async function initEfootball(){
     applyLeagueOptions(EF_LEAGUES);
     await ensureLeagues();
     await renderLeagueSelects();
-    setRegisterPanelVisible(shouldOpenAuthPanelFromHash());
+    setAuthPanelVisible(getAuthPanelFromHash());
 
     if(window.ummaAuth?.onAuthStateChanged){
         window.ummaAuth.onAuthStateChanged(async (user)=>{
@@ -51,9 +51,10 @@ async function initEfootball(){
                 currentPlayer = null;
                 document.getElementById("efLogoutBtn").style.display = "none";
                 document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
+                document.getElementById("efOpenLoginBtn").style.display = "inline-block";
                 document.getElementById("efAccountCard").style.display = "none";
                 document.getElementById("efMyMatchesCard").style.display = "none";
-                setRegisterPanelVisible(false);
+                setAuthPanelVisible("");
                 await renderFixtures();
                 await renderResults();
                 await renderStandings();
@@ -64,9 +65,10 @@ async function initEfootball(){
             if(!currentPlayer){
                 document.getElementById("efLogoutBtn").style.display = "inline-block";
                 document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
+                document.getElementById("efOpenLoginBtn").style.display = "inline-block";
                 document.getElementById("efAccountCard").style.display = "none";
                 document.getElementById("efMyMatchesCard").style.display = "none";
-                setRegisterPanelVisible(true);
+                setAuthPanelVisible("efRegisterCard");
                 await renderFixtures();
                 await renderResults();
                 await renderStandings();
@@ -75,9 +77,10 @@ async function initEfootball(){
             }
             document.getElementById("efLogoutBtn").style.display = "inline-block";
             document.getElementById("efOpenRegisterBtn").style.display = "none";
+            document.getElementById("efOpenLoginBtn").style.display = "none";
             document.getElementById("efAccountCard").style.display = "none";
             document.getElementById("efMyMatchesCard").style.display = "block";
-            setRegisterPanelVisible(false);
+            setAuthPanelVisible("");
             await renderAccount();
             await renderFixtures();
             await renderResults();
@@ -88,9 +91,11 @@ async function initEfootball(){
     }
 }
 
-function shouldOpenAuthPanelFromHash(){
+function getAuthPanelFromHash(){
     const hash = String(window.location.hash || "").toLowerCase();
-    return hash === "#login" || hash === "#register" || hash === "#eflogin" || hash === "#efregister";
+    if(hash === "#login" || hash === "#eflogin") return "efLoginCard";
+    if(hash === "#register" || hash === "#efregister") return "efRegisterCard";
+    return "";
 }
 
 function applyLeagueOptions(leagues){
@@ -165,11 +170,15 @@ function syncLeagueSelectors(league){
 function bindUi(){
     const menuBtn = document.getElementById("efMenuBtn");
     const menuPanel = document.getElementById("efMenuPanel");
+    const openLoginBtn = document.getElementById("efOpenLoginBtn");
     const openRegisterBtn = document.getElementById("efOpenRegisterBtn");
     document.getElementById("efRegisterBtn")?.addEventListener("click", registerPlayer);
     document.getElementById("efLoginBtn")?.addEventListener("click", loginPlayer);
+    if(openLoginBtn){
+        openLoginBtn.addEventListener("click", ()=> setAuthPanelVisible("efLoginCard"));
+    }
     if(openRegisterBtn){
-        openRegisterBtn.addEventListener("click", ()=> setRegisterPanelVisible(true));
+        openRegisterBtn.addEventListener("click", ()=> setAuthPanelVisible("efRegisterCard"));
     }
     if(menuBtn && menuPanel){
         menuBtn.addEventListener("click", ()=> menuPanel.classList.toggle("open"));
@@ -199,13 +208,14 @@ function bindUi(){
     applyMenuView(currentMenuTarget);
 }
 
-function setRegisterPanelVisible(visible){
-    const card = document.getElementById("efRegisterCard");
-    if(!card) return;
-    if(visible){
-        applyMenuView("efRegisterCard");
+function setAuthPanelVisible(target){
+    const safeTarget = target === "efRegisterCard" || target === "efLoginCard" ? target : "";
+    if(safeTarget){
+        const card = document.getElementById(safeTarget);
+        if(!card) return;
+        applyMenuView(safeTarget);
         card.scrollIntoView({ behavior: "smooth", block: "start" });
-    } else if(currentMenuTarget === "efRegisterCard"){
+    } else if(currentMenuTarget === "efRegisterCard" || currentMenuTarget === "efLoginCard"){
         applyMenuView("efFixturesSection");
     }
 }
@@ -219,6 +229,7 @@ function scrollToSection(id){
 
 function applyMenuView(target){
     currentMenuTarget = target || "efFixturesSection";
+    const loginCard = document.getElementById("efLoginCard");
     const registerCard = document.getElementById("efRegisterCard");
     const leagueCard = document.getElementById("efLeagueCard");
     const fixturesSection = document.getElementById("efFixturesSection");
@@ -226,13 +237,15 @@ function applyMenuView(target){
     const standingsSection = document.getElementById("efStandingsSection");
     const myMatchesCard = document.getElementById("efMyMatchesCard");
 
+    const showLogin = currentMenuTarget === "efLoginCard";
     const showRegister = currentMenuTarget === "efRegisterCard";
     const showFixtures = currentMenuTarget === "efFixturesSection";
     const showResults = currentMenuTarget === "efResultsSection";
     const showStandings = currentMenuTarget === "efStandingsSection";
 
+    if(loginCard) loginCard.style.display = showLogin ? "block" : "none";
     if(registerCard) registerCard.style.display = showRegister ? "block" : "none";
-    if(leagueCard) leagueCard.style.display = showRegister ? "none" : "block";
+    if(leagueCard) leagueCard.style.display = (showRegister || showLogin) ? "none" : "block";
     if(fixturesSection) fixturesSection.style.display = showFixtures ? "block" : "none";
     if(resultsSection) resultsSection.style.display = showResults ? "block" : "none";
     if(standingsSection) standingsSection.style.display = showStandings ? "block" : "none";
@@ -391,8 +404,8 @@ async function registerPlayer(){
 }
 
 async function loginPlayer(){
-    const email = String(document.getElementById("efEmail")?.value || "").trim().toLowerCase();
-    const password = String(document.getElementById("efPassword")?.value || "");
+    const email = String(document.getElementById("efLoginEmail")?.value || "").trim().toLowerCase();
+    const password = String(document.getElementById("efLoginPassword")?.value || "");
     if(!email || !password){
         alert("Enter email and password.");
         return;
