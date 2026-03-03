@@ -483,6 +483,9 @@ function bindAdminActions(){
             if(action === 'mark-paid'){
                 runButtonAction(btn, ()=> markTeamPaid(teamName));
             }
+            if(action === 'make-payment'){
+                runButtonAction(btn, ()=> makeTeamPayment(teamName));
+            }
             if(action === 'delete'){
                 runButtonAction(btn, ()=> deleteTeam(teamName));
             }
@@ -499,6 +502,10 @@ function bindAdminActions(){
 
             if(action === 'all-mark-paid'){
                 runButtonAction(btn, ()=> markTeamPaid(teamName));
+                return;
+            }
+            if(action === 'all-make-payment'){
+                runButtonAction(btn, ()=> makeTeamPayment(teamName));
                 return;
             }
             if(action === 'all-activate'){
@@ -767,6 +774,7 @@ function renderAllTeamsManagementTable(){
             <td>${escapeHTML(t.status || 'Pending Payment')}</td>
             <td>
                 ${showMarkPaid ? `<button class="btn" data-action="all-mark-paid" data-team="${escapeAttr(t.teamName)}">Mark Paid</button>` : ''}
+                <button class="btn" data-action="all-make-payment" data-team="${escapeAttr(t.teamName)}">Make Payment</button>
                 <button class="btn btn-primary" data-action="all-activate" data-team="${escapeAttr(t.teamName)}">Activate</button>
                 <button class="btn" data-action="all-pending" data-team="${escapeAttr(t.teamName)}">Pending</button>
                 <button class="btn btn-outline" data-action="all-withdraw" data-team="${escapeAttr(t.teamName)}">Withdraw</button>
@@ -929,6 +937,7 @@ function renderTeamTable(){
             <td>
                 <button class="btn btn-primary" data-action="run-team-action" data-team="${escapeAttr(t.teamName)}">Save</button>
                 ${showMarkPaid ? `<button class="btn" data-action="mark-paid" data-team="${escapeAttr(t.teamName)}">Mark Paid</button>` : ''}
+                <button class="btn" data-action="make-payment" data-team="${escapeAttr(t.teamName)}">Make Payment</button>
                 <button class="btn btn-outline danger" data-action="delete" data-team="${escapeAttr(t.teamName)}">Delete</button>
             </td>
         `;
@@ -1792,6 +1801,41 @@ function markTeamPaid(teamName){
     }
     teams[idx].status = 'Active';
     teams[idx].paymentStatus = Number(teams[idx].feePaid || 0) <= 0 ? 'Free' : 'Paid';
+    teams[idx].paidAt = new Date().toISOString();
+    setJSON('teams', teams);
+    renderAllAdminData();
+}
+
+function makeTeamPayment(teamName){
+    const teams = getJSON('teams', []);
+    const idx = teams.findIndex((t)=> t.teamName === teamName);
+    if(idx === -1){
+        alert('Team not found');
+        return;
+    }
+
+    const currentAmount = Number(teams[idx].feePaid || 0);
+    const amountRaw = prompt(`Enter payment amount for ${teamName}`, String(currentAmount > 0 ? currentAmount : 500));
+    if(amountRaw === null) return;
+    const amount = Number(String(amountRaw).trim());
+    if(!Number.isFinite(amount) || amount < 0){
+        alert('Enter a valid amount');
+        return;
+    }
+
+    const existingRef = String(teams[idx].mpesaRef || '').trim();
+    const refRaw = prompt(`Enter M-Pesa reference for ${teamName}`, existingRef || '');
+    if(refRaw === null) return;
+    const mpesaRef = String(refRaw).trim();
+    if(amount > 0 && !mpesaRef){
+        alert('M-Pesa reference is required for paid teams');
+        return;
+    }
+
+    teams[idx].feePaid = amount;
+    teams[idx].mpesaRef = mpesaRef;
+    teams[idx].status = amount > 0 ? 'Active' : (teams[idx].status || 'Pending Payment');
+    teams[idx].paymentStatus = amount > 0 ? 'Paid' : 'Free';
     teams[idx].paidAt = new Date().toISOString();
     setJSON('teams', teams);
     renderAllAdminData();
