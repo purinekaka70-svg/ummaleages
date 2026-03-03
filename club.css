@@ -111,7 +111,7 @@ input,select{
 }
 .grid-player{
   display:grid;
-  grid-template-columns:1fr auto;
+  grid-template-columns:1fr 180px auto;
   gap:10px;
 }
 

@@ -411,7 +411,7 @@ async function renderPlayers(){
     body.innerHTML = "";
     players.forEach((p)=>{
         const tr = document.createElement("tr");
-        tr.innerHTML = `<td>${String(p.name || "")}</td><td><button class="btn btn-primary" data-action="remove-player" data-player="${String(p.name || "")}">Remove</button></td>`;
+        tr.innerHTML = `<td>${String(p.name || "")}</td><td>${String(p.position || "-")}</td><td><button class="btn btn-primary" data-action="remove-player" data-player="${String(p.name || "")}">Remove</button></td>`;
         body.appendChild(tr);
     });
 }
@@ -420,20 +420,25 @@ async function addPlayer(){
     if(!ensurePortalUnlocked()) return;
     const clubName = getCurrentClub();
     const input = document.getElementById("newPlayerInput");
+    const positionInput = document.getElementById("newPlayerPosition");
     const playerName = collapseSpaces(input?.value || "");
+    const position = collapseSpaces(positionInput?.value || "");
     if(!clubName || !playerName) return alert("Enter player name.");
+    if(!position) return alert("Select player position.");
 
     const id = `${slug(clubName)}__${slug(playerName)}`;
     try{
         await setDoc(doc(window.ummaFire.db, "players", id), {
             id,
             name: playerName,
+            position,
             team: clubName,
             ownerUid: currentUser?.uid || null,
             updatedAtMs: Date.now()
         }, { merge: true });
         invalidateClubCache("players");
         if(input) input.value = "";
+        if(positionInput) positionInput.value = "";
         await renderPlayers();
         await renderSquadPlayerChecks();
     } catch(err){
@@ -482,13 +487,16 @@ async function renderSquadPlayerChecks(){
     const clubName = getCurrentClub();
     if(!clubName) return;
 
-    const players = await getTeamPlayers(clubName);
-    const names = players.map((p)=> p.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    const players = (await getTeamPlayers(clubName))
+        .filter((p)=> p.name)
+        .sort((a,b)=> String(a.name).localeCompare(String(b.name)));
     host.innerHTML = "";
-    names.forEach((name)=>{
+    players.forEach((player)=>{
+        const name = String(player.name);
+        const position = collapseSpaces(player.position || "");
         const row = document.createElement("label");
         row.style.display = "block";
-        row.innerHTML = `<input type="checkbox" data-role="starter" value="${String(name)}"> ${String(name)}`;
+        row.innerHTML = `<input type="checkbox" data-role="starter" value="${name}"> ${name}${position ? ` (${position})` : ""}`;
         host.appendChild(row);
     });
     const countEl = document.getElementById("squadStarterCount");

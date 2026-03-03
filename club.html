@@ -82,11 +82,19 @@
                 <h3>Players</h3>
                 <div class="grid-player">
                     <input id="newPlayerInput" placeholder="Player full name">
+                    <select id="newPlayerPosition">
+                        <option value="">Select position</option>
+                        <option value="Goalkeeper">Goalkeeper</option>
+                        <option value="Defender">Defender</option>
+                        <option value="Midfielder">Midfielder</option>
+                        <option value="Winger">Winger</option>
+                        <option value="Striker">Striker</option>
+                    </select>
                     <button id="addPlayerBtn" class="btn">Add Player</button>
                 </div>
                 <table class="simple-table" style="margin-top:10px">
                     <thead>
-                        <tr><th>Player</th><th>Action</th></tr>
+                        <tr><th>Player</th><th>Position</th><th>Action</th></tr>
                     </thead>
                     <tbody id="clubPlayersBody"></tbody>
                 </table>
