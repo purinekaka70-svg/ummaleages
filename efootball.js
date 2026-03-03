@@ -164,11 +164,30 @@ async function renderLeagueSelects(){
 }
 
 async function fetchLeagues(){
-    const snap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.leagues));
-    const rows = snap.docs.map((d)=> d.data()).filter((l)=> l?.name);
     const merged = new Map();
-    EF_LEAGUES.forEach((l)=> merged.set(l.name.toLowerCase(), l));
-    rows.forEach((l)=> merged.set(String(l.name).toLowerCase(), { ...l, fee: Number(l.fee || 200) }));
+    EF_LEAGUES.forEach((league)=> merged.set(String(league.name).toLowerCase(), {
+        id: league.id,
+        name: league.name,
+        fee: Number(league.fee || 200)
+    }));
+
+    if(!window.ummaFire?.db){
+        return [...merged.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+    }
+
+    try{
+        const snap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.leagues));
+        const rows = snap.docs.map((d)=> d.data()).filter((league)=> league?.name);
+        rows.forEach((league)=>{
+            merged.set(String(league.name).toLowerCase(), {
+                ...league,
+                fee: Number(league.fee || 200)
+            });
+        });
+    } catch {
+        // Keep hardcoded leagues even if Firestore read fails.
+    }
+
     return [...merged.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
 }
 
