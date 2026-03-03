@@ -55,10 +55,15 @@ input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
 .row-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .table{width:100%;border-collapse:collapse;min-width:680px}
 .table th,.table td{padding:8px;border-bottom:1px solid #eef1f7;text-align:left}
+.standings{width:100%;min-width:640px;border-collapse:collapse}
+.standings thead th{background:linear-gradient(90deg,var(--purple),#3a0f5b);color:#fff;padding:10px;text-align:left}
+.standings td,.standings th{padding:8px;border-bottom:1px solid #eee;text-align:left}
+.standings tbody tr:nth-child(odd){background:#faf9ff}
 
 @media(max-width:700px){
   .grid{grid-template-columns:1fr}
   .table{min-width:560px}
+  .standings{min-width:560px}
   .actions{width:100%}
   .actions .btn{flex:1}
 }
