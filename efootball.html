@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>E-Football Platform</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="efootball.css">
+</head>
+<body>
+    <header class="ef-header">
+        <div class="container row">
+            <div class="brand">E-Football</div>
+            <div class="actions">
+                <a href="index.html" class="btn btn-outline">Back To Main Site</a>
+                <button id="efLogoutBtn" class="btn btn-outline" style="display:none">Logout</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="card">
+            <h2>E-Football Registration</h2>
+            <p class="muted">Player registration fee: <strong>Ksh 200</strong> per league.</p>
+            <div class="grid">
+                <input id="efPlayerName" placeholder="Player Name" />
+                <input id="efPhone" placeholder="Phone Number" />
+                <input id="efMpesaRef" placeholder="M-Pesa Reference" />
+                <input id="efEmail" placeholder="Email" />
+                <input id="efPassword" type="password" placeholder="Password" />
+                <select id="efLeagueSelect"></select>
+            </div>
+            <div class="btns">
+                <button id="efRegisterBtn" class="btn">Register Player</button>
+                <button id="efLoginBtn" class="btn btn-primary">Login</button>
+            </div>
+        </section>
+
+        <section id="efAccountCard" class="card" style="display:none">
+            <h3>My Account</h3>
+            <div id="efAccountInfo" class="muted"></div>
+        </section>
+
+        <section class="card">
+            <h3>Leagues</h3>
+            <div class="row-wrap">
+                <label for="efLeagueView"><strong>League:</strong></label>
+                <select id="efLeagueView"></select>
+            </div>
+        </section>
+
+        <section class="card">
+            <h3>Fixtures</h3>
+            <table class="table">
+                <thead>
+                    <tr><th>League</th><th>Match</th><th>Status</th><th>Result</th></tr>
+                </thead>
+                <tbody id="efFixturesBody"></tbody>
+            </table>
+        </section>
+
+        <section class="card">
+            <h3>Standings</h3>
+            <table class="table">
+                <thead>
+                    <tr><th>#</th><th>Player</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GD</th><th>Pts</th></tr>
+                </thead>
+                <tbody id="efStandingsBody"></tbody>
+            </table>
+        </section>
+
+        <section id="efMyMatchesCard" class="card" style="display:none">
+            <h3>My Matches (Submit Result)</h3>
+            <table class="table">
+                <thead>
+                    <tr><th>Fixture</th><th>Score</th><th>Action</th></tr>
+                </thead>
+                <tbody id="efMyMatchesBody"></tbody>
+            </table>
+        </section>
+    </main>
+
+    <script type="module" src="firebase-bridge.js"></script>
+    <script type="module" src="efootball.js"></script>
+</body>
+</html>
