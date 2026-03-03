@@ -8,7 +8,7 @@ let currentLeagueView = "";
 let portalLockedForPayment = true;
 const WEEKLY_MAINTENANCE_TILL = "7312380";
 const WEEKLY_MAINTENANCE_AMOUNT = 200;
-const MOBILE_MENU_MAX_WIDTH = 900;
+const MOBILE_MENU_MAX_WIDTH = 1100;
 const CLUB_CACHE_TTL_MS = 5000;
 const clubCache = {
     fixtures: { team: "", data: [], expiresAt: 0, inFlight: null },
