@@ -8,6 +8,9 @@ const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
 let adminRefreshTimer = null;
 const adminWindowFocusRefresh = ()=>{ renderAllAdminData(true); };
+let adminRenderInFlight = false;
+let adminRenderQueued = false;
+let adminRenderForceQueued = false;
 const ADMIN_DEFAULT_LEAGUES = [
     {
         id:'umma-premier',
@@ -268,7 +271,10 @@ async function syncAdminFromFirebase(forceReload = false){
 
 function startAdminLiveRefresh(){
     stopAdminLiveRefresh();
-    adminRefreshTimer = setInterval(adminWindowFocusRefresh, 7000);
+    adminRefreshTimer = setInterval(()=>{
+        if(document.visibilityState === 'hidden') return;
+        adminWindowFocusRefresh();
+    }, 7000);
     window.addEventListener('focus', adminWindowFocusRefresh);
 }
 
@@ -340,13 +346,28 @@ function bindAdminActions(){
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
 
-    if(refreshBtn) refreshBtn.addEventListener('click', ()=> renderAllAdminData(true));
+    function runButtonAction(btn, action){
+        if(!btn) return Promise.resolve(action());
+        if(btn.disabled || btn.dataset.busy === 'true') return Promise.resolve();
+        btn.dataset.busy = 'true';
+        const previousText = btn.textContent;
+        btn.disabled = true;
+        return Promise.resolve()
+            .then(()=> action())
+            .finally(()=>{
+                btn.disabled = false;
+                btn.dataset.busy = 'false';
+                if(typeof previousText === 'string') btn.textContent = previousText;
+            });
+    }
+
+    if(refreshBtn) refreshBtn.addEventListener('click', ()=> runButtonAction(refreshBtn, ()=> renderAllAdminData(true)));
     if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open(appUrl('index.html'), '_blank'));
-    if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
-    if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
-    if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', saveSemesterCalendar);
-    if(autoPlanFixturesBtn) autoPlanFixturesBtn.addEventListener('click', autoPlanSemesterFixtures);
-    if(planLeagueFixturesBtn) planLeagueFixturesBtn.addEventListener('click', planSelectedLeagueFixtures);
+    if(addLeagueBtn) addLeagueBtn.addEventListener('click', ()=> runButtonAction(addLeagueBtn, addLeague));
+    if(addFixtureBtn) addFixtureBtn.addEventListener('click', ()=> runButtonAction(addFixtureBtn, addFixture));
+    if(saveSemesterBtn) saveSemesterBtn.addEventListener('click', ()=> runButtonAction(saveSemesterBtn, saveSemesterCalendar));
+    if(autoPlanFixturesBtn) autoPlanFixturesBtn.addEventListener('click', ()=> runButtonAction(autoPlanFixturesBtn, autoPlanSemesterFixtures));
+    if(planLeagueFixturesBtn) planLeagueFixturesBtn.addEventListener('click', ()=> runButtonAction(planLeagueFixturesBtn, planSelectedLeagueFixtures));
     if(fixtureLeagueInput) fixtureLeagueInput.addEventListener('change', ()=>{
         renderFixtureTeamSuggestions();
         renderPlannerHints();
@@ -354,17 +375,17 @@ function bindAdminActions(){
     if(fixtureDateInput) fixtureDateInput.addEventListener('change', updateManualDayPreview);
     if(planLeagueInput) planLeagueInput.addEventListener('change', renderPlannerHints);
     if(resultFixtureInput) resultFixtureInput.addEventListener('change', renderResultFixtureContext);
-    if(saveResultBtn) saveResultBtn.addEventListener('click', saveFixtureResult);
-    if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', saveHalfTimeResult);
-    if(homeGoalBtn) homeGoalBtn.addEventListener('click', ()=> addGoalEvent('home'));
-    if(awayGoalBtn) awayGoalBtn.addEventListener('click', ()=> addGoalEvent('away'));
-    if(undoGoalBtn) undoGoalBtn.addEventListener('click', undoLastGoalEvent);
+    if(saveResultBtn) saveResultBtn.addEventListener('click', ()=> runButtonAction(saveResultBtn, saveFixtureResult));
+    if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', ()=> runButtonAction(saveHalfTimeBtn, saveHalfTimeResult));
+    if(homeGoalBtn) homeGoalBtn.addEventListener('click', ()=> runButtonAction(homeGoalBtn, ()=> addGoalEvent('home')));
+    if(awayGoalBtn) awayGoalBtn.addEventListener('click', ()=> runButtonAction(awayGoalBtn, ()=> addGoalEvent('away')));
+    if(undoGoalBtn) undoGoalBtn.addEventListener('click', ()=> runButtonAction(undoGoalBtn, undoLastGoalEvent));
     if(refreshResultsBtn) refreshResultsBtn.addEventListener('click', ()=>{
         populateResultFixtureInputs();
         renderResultFixtureContext();
     });
-    if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', carryQualifiedTeamsToChampions);
-    if(finishPremierBtn) finishPremierBtn.addEventListener('click', finishPremierLeague);
+    if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', ()=> runButtonAction(carryQualifiedBtn, carryQualifiedTeamsToChampions));
+    if(finishPremierBtn) finishPremierBtn.addEventListener('click', ()=> runButtonAction(finishPremierBtn, finishPremierLeague));
     if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', ()=>{
         renderTeamTable();
         renderAllTeamsManagementTable();
@@ -381,13 +402,13 @@ function bindAdminActions(){
             if(action === 'run-team-action'){
                 const statusSelect = document.getElementById(`team-status-${slugify(teamName)}`);
                 if(!statusSelect) return;
-                updateTeamStatus(teamName, statusSelect.value);
+                runButtonAction(btn, ()=> updateTeamStatus(teamName, statusSelect.value));
             }
             if(action === 'mark-paid'){
-                markTeamPaid(teamName);
+                runButtonAction(btn, ()=> markTeamPaid(teamName));
             }
             if(action === 'delete'){
-                deleteTeam(teamName);
+                runButtonAction(btn, ()=> deleteTeam(teamName));
             }
         });
     }
@@ -401,23 +422,23 @@ function bindAdminActions(){
             if(!teamName || !action) return;
 
             if(action === 'all-mark-paid'){
-                markTeamPaid(teamName);
+                runButtonAction(btn, ()=> markTeamPaid(teamName));
                 return;
             }
             if(action === 'all-activate'){
-                updateTeamStatus(teamName, 'Active');
+                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Active'));
                 return;
             }
             if(action === 'all-pending'){
-                updateTeamStatus(teamName, 'Pending Payment');
+                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Pending Payment'));
                 return;
             }
             if(action === 'all-withdraw'){
-                updateTeamStatus(teamName, 'Withdrawn');
+                runButtonAction(btn, ()=> updateTeamStatus(teamName, 'Withdrawn'));
                 return;
             }
             if(action === 'all-delete'){
-                deleteTeam(teamName);
+                runButtonAction(btn, ()=> deleteTeam(teamName));
             }
         });
     }
@@ -429,11 +450,11 @@ function bindAdminActions(){
             const leagueName = btn.dataset.league;
             if(!leagueName) return;
             if(btn.dataset.action === 'delete-league'){
-                deleteLeague(leagueName);
+                runButtonAction(btn, ()=> deleteLeague(leagueName));
                 return;
             }
             if(btn.dataset.action === 'plan-league'){
-                planLeagueByName(leagueName);
+                runButtonAction(btn, ()=> planLeagueByName(leagueName));
             }
         });
     }
@@ -446,15 +467,15 @@ function bindAdminActions(){
             if(!fixtureId) return;
             const action = btn.dataset.action;
             if(action === 'delete-fixture'){
-                deleteFixture(fixtureId);
+                runButtonAction(btn, ()=> deleteFixture(fixtureId));
                 return;
             }
             if(action === 'approve-fixture'){
-                updateFixtureStatus(fixtureId, 'Approved');
+                runButtonAction(btn, ()=> updateFixtureStatus(fixtureId, 'Approved'));
                 return;
             }
             if(action === 'abandon-fixture'){
-                updateFixtureStatus(fixtureId, 'Abandoned');
+                runButtonAction(btn, ()=> updateFixtureStatus(fixtureId, 'Abandoned'));
             }
         });
     }
@@ -605,21 +626,37 @@ async function adminLogout(){
 }
 
 async function renderAllAdminData(forceReload = false){
-    await syncAdminFromFirebase(forceReload);
-    renderStats();
-    renderLeagueTable();
-    populateTeamLeagueFilter();
-    renderTeamsByLeagueDirectory();
-    renderAllTeamsManagementTable();
-    renderTeamTable();
-    renderFixtureTable();
-    populateFixtureInputs();
-    renderSemesterCalendarInputs();
-    renderPlannerHints();
-    populateResultFixtureInputs();
-    renderResultFixtureContext();
-    renderPremierOutcomePreview();
-    updateManualDayPreview();
+    if(adminRenderInFlight){
+        adminRenderQueued = true;
+        adminRenderForceQueued = adminRenderForceQueued || Boolean(forceReload);
+        return;
+    }
+    adminRenderInFlight = true;
+    try{
+        await syncAdminFromFirebase(forceReload);
+        renderStats();
+        renderLeagueTable();
+        populateTeamLeagueFilter();
+        renderTeamsByLeagueDirectory();
+        renderAllTeamsManagementTable();
+        renderTeamTable();
+        renderFixtureTable();
+        populateFixtureInputs();
+        renderSemesterCalendarInputs();
+        renderPlannerHints();
+        populateResultFixtureInputs();
+        renderResultFixtureContext();
+        renderPremierOutcomePreview();
+        updateManualDayPreview();
+    } finally {
+        adminRenderInFlight = false;
+        if(adminRenderQueued){
+            const nextForce = adminRenderForceQueued;
+            adminRenderQueued = false;
+            adminRenderForceQueued = false;
+            renderAllAdminData(nextForce);
+        }
+    }
 }
 
 function renderAllTeamsManagementTable(){
