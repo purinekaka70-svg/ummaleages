@@ -213,8 +213,11 @@ async function fetchLeagues(){
     try{
         const snap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.leagues));
         const rows = snap.docs.map((d)=> d.data()).filter((league)=> league?.name);
+        const allowed = new Set(EF_LEAGUES.map((league)=> String(league.name).toLowerCase()));
         rows.forEach((league)=>{
-            merged.set(String(league.name).toLowerCase(), {
+            const key = String(league.name).toLowerCase();
+            if(!allowed.has(key)) return;
+            merged.set(key, {
                 ...league,
                 fee: Number(league.fee || 200)
             });
@@ -223,7 +226,15 @@ async function fetchLeagues(){
         // Keep hardcoded leagues even if Firestore read fails.
     }
 
-    return [...merged.values()].sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+    // Force exactly the 5 hardcoded leagues in stable order.
+    return EF_LEAGUES.map((league)=>{
+        const fromMerged = merged.get(String(league.name).toLowerCase()) || {};
+        return {
+            id: fromMerged.id || league.id,
+            name: league.name,
+            fee: Number(fromMerged.fee || league.fee || 200)
+        };
+    });
 }
 
 async function registerPlayer(){
