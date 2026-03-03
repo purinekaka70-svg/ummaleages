@@ -403,18 +403,42 @@ async function createFixturesForNewPlayer(playerName, league){
     }
 }
 
+function normalizeLeagueKey(value){
+    return String(value || "").trim().toLowerCase();
+}
+
 async function fetchFixturesByLeague(league){
-    const snap = await getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures), where("league", "==", league)));
-    return snap.docs.map((d)=> d.data()).sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
+    if(!window.ummaFire?.db) return [];
+    const selectedKey = normalizeLeagueKey(league);
+    try{
+        if(selectedKey){
+            const snap = await getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures), where("league", "==", league)));
+            const exactRows = snap.docs.map((d)=> d.data());
+            if(exactRows.length > 0){
+                return exactRows.sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
+            }
+        }
+
+        // Fallback: fetch all fixtures, then filter client-side (handles older mixed league text/casing).
+        const allSnap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures));
+        const rows = allSnap.docs.map((d)=> d.data());
+        const filtered = selectedKey
+            ? rows.filter((row)=> normalizeLeagueKey(row?.league) === selectedKey)
+            : rows;
+        return filtered.sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
+    } catch {
+        return [];
+    }
 }
 
 async function renderFixtures(){
     const host = document.getElementById("efFixturesList");
-    if(!host || !currentLeague) return;
+    if(!host) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
     host.innerHTML = "";
     if(fixtures.length === 0){
-        host.innerHTML = `<li class="muted">No fixtures in ${currentLeague} yet.</li>`;
+        const leagueLabel = currentLeague ? currentLeague : "all leagues";
+        host.innerHTML = `<li class="muted">No fixtures in ${leagueLabel} yet.</li>`;
         return;
     }
     fixtures.forEach((f)=>{
