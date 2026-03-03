@@ -252,6 +252,10 @@ function bindClubEvents(){
     }
     if(menuBtn && menuPanel){
         const mobileQuery = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`);
+        const closeMobileMenu = ()=>{
+            menuPanel.classList.remove("open");
+            menuBtn.setAttribute("aria-expanded", "false");
+        };
         const syncMenuState = ()=>{
             const isMobile = mobileQuery.matches;
             if(!isMobile){
@@ -259,8 +263,7 @@ function bindClubEvents(){
                 menuBtn.setAttribute("aria-expanded", "true");
                 return;
             }
-            menuPanel.classList.remove("open");
-            menuBtn.setAttribute("aria-expanded", "false");
+            closeMobileMenu();
         };
         syncMenuState();
         if(typeof mobileQuery.addEventListener === "function"){
@@ -269,6 +272,7 @@ function bindClubEvents(){
             mobileQuery.addListener(syncMenuState);
         }
         window.addEventListener("resize", syncMenuState);
+        window.addEventListener("orientationchange", syncMenuState);
         menuBtn.addEventListener("click", ()=>{
             if(!mobileQuery.matches) return;
             const opened = menuPanel.classList.toggle("open");
@@ -277,16 +281,17 @@ function bindClubEvents(){
         document.addEventListener("click", (event)=>{
             if(!mobileQuery.matches || !menuPanel.classList.contains("open")) return;
             if(menuPanel.contains(event.target) || menuBtn.contains(event.target)) return;
-            menuPanel.classList.remove("open");
-            menuBtn.setAttribute("aria-expanded", "false");
+            closeMobileMenu();
         });
     }
     menuLinks.forEach((btn)=>{
         btn.addEventListener("click", ()=>{
             openClubSection(btn.dataset.target);
             const isMobile = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`).matches;
-            if(menuPanel && isMobile) menuPanel.classList.remove("open");
-            if(menuBtn && isMobile) menuBtn.setAttribute("aria-expanded", "false");
+            if(menuPanel && menuBtn && isMobile){
+                menuPanel.classList.remove("open");
+                menuBtn.setAttribute("aria-expanded", "false");
+            }
         });
     });
     if(playersBody){
