@@ -31,6 +31,7 @@ body{
 }
 .brand{font-weight:700;font-size:20px;color:var(--gold)}
 .header-actions{display:flex;gap:8px}
+.header-actions .btn{text-align:center}
 .hamburger{
   border:1px solid rgba(255,255,255,0.28);
   background:transparent;
@@ -159,7 +160,7 @@ input,select{
 @media(max-width:780px){
   .hamburger{display:block}
   .header-inner{align-items:flex-start;flex-wrap:wrap}
-  .header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .header-actions{width:100%;display:grid;grid-template-columns:1fr}
   .club-menu{display:none}
   .club-menu.open{display:flex}
   .club-menu{padding:10px 12px 12px}
@@ -167,4 +168,14 @@ input,select{
   .grid-2{grid-template-columns:1fr}
   .grid-player{grid-template-columns:1fr}
   .player-checks{grid-template-columns:1fr}
+}
+
+@media(max-width:900px){
+  .hamburger{display:block}
+  .header-inner{align-items:flex-start;flex-wrap:wrap}
+  .header-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+  .club-menu{display:none}
+  .club-menu.open{display:flex}
+  .club-menu{padding:10px 12px 12px}
+  .menu-link{width:100%;text-align:left}
 }

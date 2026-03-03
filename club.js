@@ -8,6 +8,7 @@ let currentLeagueView = "";
 let portalLockedForPayment = true;
 const WEEKLY_MAINTENANCE_TILL = "7312380";
 const WEEKLY_MAINTENANCE_AMOUNT = 200;
+const MOBILE_MENU_MAX_WIDTH = 900;
 const CLUB_CACHE_TTL_MS = 5000;
 const clubCache = {
     fixtures: { team: "", data: [], expiresAt: 0, inFlight: null },
@@ -109,7 +110,7 @@ function clearCurrentClub(){
 
 function openClubSection(sectionId){
     if(portalLockedForPayment && sectionId !== "clubProfileSection"){
-        setText("clubPortalLockNotice", `Portal locked: pay KES ${WEEKLY_MAINTENANCE_AMOUNT} and submit M-Pesa reference for this week to continue.`);
+        setText("clubPortalLockNotice", `Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to Till ${WEEKLY_MAINTENANCE_TILL}. Enter M-Pesa ref to unlock.`);
         sectionId = "clubProfileSection";
     }
     const sections = document.querySelectorAll(".club-panel");
@@ -164,8 +165,8 @@ function isWeeklyPaymentValid(team){
 
 function applyPortalLockState(){
     const lockText = portalLockedForPayment
-        ? `Portal locked until weekly payment is submitted. Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to till ${WEEKLY_MAINTENANCE_TILL}.`
-        : `Payment submitted for this week. Portal unlocked.`;
+        ? `Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to Till ${WEEKLY_MAINTENANCE_TILL}. Enter M-Pesa ref to unlock.`
+        : `M-Pesa ref received. Portal unlocked.`;
     setText("clubPortalLockNotice", lockText);
     const links = document.querySelectorAll(".menu-link[data-target]");
     links.forEach((btn)=>{
@@ -184,16 +185,16 @@ function renderWeeklyPaymentStatus(team){
 
     if(isWeeklyPaymentValid(team)){
         const submitted = payment.submittedAtMs ? new Date(payment.submittedAtMs).toLocaleString() : "recently";
-        statusEl.textContent = `Submitted for ${payment.weekLabel || getCurrentWeekLabel()} with ref ${payment.mpesaRef} (${submitted}).`;
+        statusEl.textContent = `Paid for ${payment.weekLabel || getCurrentWeekLabel()}. Ref: ${payment.mpesaRef} (${submitted}).`;
         if(input) input.value = "";
         return;
     }
-    statusEl.textContent = `No valid payment for ${getCurrentWeekLabel()}. Submit your M-Pesa reference to unlock all sections.`;
+    statusEl.textContent = `${getCurrentWeekLabel()}: pay and enter your M-Pesa ref.`;
 }
 
 function ensurePortalUnlocked(){
     if(!portalLockedForPayment) return true;
-    alert(`Portal locked. Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to till ${WEEKLY_MAINTENANCE_TILL} and submit M-Pesa reference first.`);
+    alert(`Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to Till ${WEEKLY_MAINTENANCE_TILL}, then enter M-Pesa ref first.`);
     return false;
 }
 
@@ -250,7 +251,7 @@ function bindClubEvents(){
         });
     }
     if(menuBtn && menuPanel){
-        const mobileQuery = window.matchMedia("(max-width: 780px)");
+        const mobileQuery = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`);
         const syncMenuState = ()=>{
             const isMobile = mobileQuery.matches;
             if(!isMobile){
@@ -267,6 +268,7 @@ function bindClubEvents(){
         } else if(typeof mobileQuery.addListener === "function"){
             mobileQuery.addListener(syncMenuState);
         }
+        window.addEventListener("resize", syncMenuState);
         menuBtn.addEventListener("click", ()=>{
             if(!mobileQuery.matches) return;
             const opened = menuPanel.classList.toggle("open");
@@ -282,7 +284,7 @@ function bindClubEvents(){
     menuLinks.forEach((btn)=>{
         btn.addEventListener("click", ()=>{
             openClubSection(btn.dataset.target);
-            const isMobile = window.matchMedia("(max-width: 780px)").matches;
+            const isMobile = window.matchMedia(`(max-width: ${MOBILE_MENU_MAX_WIDTH}px)`).matches;
             if(menuPanel && isMobile) menuPanel.classList.remove("open");
             if(menuBtn && isMobile) menuBtn.setAttribute("aria-expanded", "false");
         });
@@ -330,7 +332,7 @@ async function renderClubPortal(){
         document.getElementById("clubAuthNotice").style.display = "none";
         document.getElementById("clubPortalApp").style.display = "block";
         setText("clubTillNumberTop", WEEKLY_MAINTENANCE_TILL);
-        setText("clubPaymentNoticeText", `All registered clubs must pay KES ${WEEKLY_MAINTENANCE_AMOUNT} weekly maintenance every Saturday to keep portal access active.`);
+        setText("clubPaymentNoticeText", `Pay KES ${WEEKLY_MAINTENANCE_AMOUNT} to Till ${WEEKLY_MAINTENANCE_TILL}. Enter your M-Pesa ref below.`);
         applyPortalLockState();
         renderWeeklyPaymentStatus(currentTeam);
         openClubSection("clubProfileSection");
