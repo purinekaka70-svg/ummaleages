@@ -184,7 +184,7 @@ async function fetchCollectionFromDb(name){
     if(!window.ummaFire?.db) return [];
     try{
         const snap = await getDocs(collection(window.ummaFire.db, name));
-        return snap.docs.map((d)=> ({ id: d.id, ...d.data() }));
+        return snap.docs.map((d)=> ({ ...d.data(), id: d.id }));
     } catch {
         return [];
     }
@@ -234,6 +234,14 @@ function normalizeAccountRow(user){
     };
 }
 
+function normalizeLeagueRow(league){
+    const fallback = ADMIN_DEFAULT_LEAGUES.find((l)=> l.id === league?.id || l.name === league?.name);
+    const id = String(league?.id || fallback?.id || '').trim();
+    const name = String(league?.name || fallback?.name || id).trim();
+    const desc = String(league?.desc || fallback?.desc || 'Semester competition league').trim();
+    return { id: id || slugify(name), name, desc };
+}
+
 async function hydrateAdminCollectionsFromFirestore(){
     const [leagues, teams, fixtures, standings, players, users] = await Promise.all([
         fetchCollectionFromDb('leagues'),
@@ -244,7 +252,8 @@ async function hydrateAdminCollectionsFromFirestore(){
         fetchCollectionFromDb('users')
     ]);
 
-    if(leagues.length) setMemoryJson('leagues', leagues);
+    const normalizedLeagues = leagues.map(normalizeLeagueRow).filter((l)=> l.name);
+    if(normalizedLeagues.length) setMemoryJson('leagues', normalizedLeagues);
     setMemoryJson('teams', teams.map(normalizeTeamRow));
     setMemoryJson('fixtures', fixtures.map(normalizeFixtureRow));
     setMemoryJson('standings', standings);
