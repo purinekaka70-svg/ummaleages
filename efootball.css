@@ -53,6 +53,13 @@ input,select{width:100%;padding:10px;border:1px solid #d9deea;border-radius:8px}
 .btns{margin-top:10px;display:flex;gap:8px;flex-wrap:wrap}
 .muted{color:var(--muted)}
 .row-wrap{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.table-wrap{
+  width:100%;
+  overflow-x:auto;
+  border:1px solid #e4dff1;
+  border-radius:10px;
+  background:#fff;
+}
 .table{width:100%;border-collapse:collapse;min-width:680px}
 .table th,.table td{padding:8px;border-bottom:1px solid #eef1f7;text-align:left}
 .standings{width:100%;min-width:640px;border-collapse:collapse}
