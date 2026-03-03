@@ -625,14 +625,20 @@ async function renderAllAdminData(forceReload = false){
 function renderAllTeamsManagementTable(){
     const body = document.getElementById('adminAllTeamsBody');
     if(!body) return;
-    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '__all__';
+    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
     const teams = getJSON('teams', [])
-        .filter((t)=> leagueFilter === '__all__' || t.league === leagueFilter)
+        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter))
         .sort((a,b)=> String(a.league || '').localeCompare(String(b.league || '')) || String(a.teamName || '').localeCompare(String(b.teamName || '')));
     body.innerHTML = '';
+    if(!leagueFilter){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="5" class="muted">Select a league to view registered teams.</td>';
+        body.appendChild(tr);
+        return;
+    }
     if(teams.length === 0){
         const tr = document.createElement('tr');
-        tr.innerHTML = '<td colspan="5" class="muted">No registered teams found.</td>';
+        tr.innerHTML = '<td colspan="5" class="muted">No registered teams found in selected league.</td>';
         body.appendChild(tr);
         return;
     }
@@ -690,8 +696,14 @@ function renderTeamsByLeagueDirectory(){
         const names = list
             .map((t)=> `${escapeHTML(t.teamName)} (${escapeHTML(t.status || 'Pending Payment')})`)
             .join(', ');
-        return `<div style="margin-bottom:6px"><strong>${escapeHTML(leagueName)} (${list.length})</strong>: ${names}</div>`;
+        return `<div style="margin-bottom:6px"><button class="btn btn-outline" data-action="filter-league" data-league="${escapeAttr(leagueName)}">${escapeHTML(leagueName)} (${list.length})</button>: ${names}</div>`;
     }).join('');
+    host.querySelectorAll('button[data-action="filter-league"]').forEach((btn)=>{
+        btn.addEventListener('click', ()=>{
+            const league = btn.dataset.league || '';
+            setTeamLeagueFilter(league);
+        });
+    });
 }
 
 function renderStats(){
@@ -739,24 +751,44 @@ function populateTeamLeagueFilter(){
         if(leagueName) leagueSet.add(leagueName);
     });
     const leagues = [...leagueSet].sort((a,b)=> String(a).localeCompare(String(b)));
-    const previous = sel.value || '__all__';
+    const previous = sel.value || '';
     sel.innerHTML = '';
+    sel.appendChild(new Option('Select league', ''));
     sel.appendChild(new Option('All Leagues', '__all__'));
     leagues.forEach((league)=> sel.appendChild(new Option(league, league)));
-    if(leagues.includes(previous) || previous === '__all__'){
+    if(leagues.includes(previous) || previous === '__all__' || previous === ''){
         sel.value = previous;
     } else {
-        sel.value = '__all__';
+        sel.value = '';
     }
+}
+
+function setTeamLeagueFilter(league){
+    const sel = document.getElementById('adminTeamLeagueFilter');
+    if(!sel) return;
+    const value = String(league || '');
+    if([...sel.options].some((o)=> o.value === value)){
+        sel.value = value;
+    } else {
+        sel.value = '';
+    }
+    renderTeamTable();
+    renderAllTeamsManagementTable();
 }
 
 function renderTeamTable(){
     const body = document.getElementById('adminTeamsBody');
     if(!body) return;
-    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '__all__';
+    const leagueFilter = document.getElementById('adminTeamLeagueFilter')?.value || '';
     const teams = getJSON('teams', [])
-        .filter((t)=> leagueFilter === '__all__' || t.league === leagueFilter);
+        .filter((t)=> leagueFilter && (leagueFilter === '__all__' || t.league === leagueFilter));
     body.innerHTML = '';
+    if(!leagueFilter){
+        const tr = document.createElement('tr');
+        tr.innerHTML = '<td colspan="9" class="muted">Select a league to view registered teams.</td>';
+        body.appendChild(tr);
+        return;
+    }
     if(teams.length === 0){
         const tr = document.createElement('tr');
         tr.innerHTML = '<td colspan="9" class="muted">No teams found for selected league.</td>';
