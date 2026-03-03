@@ -5,6 +5,65 @@ document.addEventListener("DOMContentLoaded", ()=>{ initClubPortal(); });
 let currentUser = null;
 let currentTeam = null;
 let currentLeagueView = "";
+const CLUB_CACHE_TTL_MS = 5000;
+const clubCache = {
+    fixtures: { team: "", data: [], expiresAt: 0, inFlight: null },
+    players: { team: "", data: [], expiresAt: 0, inFlight: null }
+};
+
+function invalidateClubCache(type){
+    if(!type){
+        clubCache.fixtures = { team: "", data: [], expiresAt: 0, inFlight: null };
+        clubCache.players = { team: "", data: [], expiresAt: 0, inFlight: null };
+        return;
+    }
+    clubCache[type] = { team: "", data: [], expiresAt: 0, inFlight: null };
+}
+
+async function getTeamFixtures(teamName, options = {}){
+    const team = String(teamName || "");
+    const force = Boolean(options.force);
+    const now = Date.now();
+    const cache = clubCache.fixtures;
+    if(!force && cache.team === team && cache.expiresAt > now){
+        return cache.data;
+    }
+    if(!force && cache.team === team && cache.inFlight){
+        return cache.inFlight;
+    }
+    const loadPromise = (async ()=>{
+        const [homeSnap, awaySnap] = await Promise.all([
+            getDocs(query(collection(window.ummaFire.db, "fixtures"), where("home", "==", team))),
+            getDocs(query(collection(window.ummaFire.db, "fixtures"), where("away", "==", team)))
+        ]);
+        const data = [...homeSnap.docs, ...awaySnap.docs].map((d)=> ({ id: d.id, ...d.data() }));
+        clubCache.fixtures = { team, data, expiresAt: Date.now() + CLUB_CACHE_TTL_MS, inFlight: null };
+        return data;
+    })();
+    clubCache.fixtures = { team, data: [], expiresAt: 0, inFlight: loadPromise };
+    return loadPromise;
+}
+
+async function getTeamPlayers(teamName, options = {}){
+    const team = String(teamName || "");
+    const force = Boolean(options.force);
+    const now = Date.now();
+    const cache = clubCache.players;
+    if(!force && cache.team === team && cache.expiresAt > now){
+        return cache.data;
+    }
+    if(!force && cache.team === team && cache.inFlight){
+        return cache.inFlight;
+    }
+    const loadPromise = (async ()=>{
+        const snap = await getDocs(query(collection(window.ummaFire.db, "players"), where("team", "==", team)));
+        const data = snap.docs.map((d)=> ({ id: d.id, ...d.data() }));
+        clubCache.players = { team, data, expiresAt: Date.now() + CLUB_CACHE_TTL_MS, inFlight: null };
+        return data;
+    })();
+    clubCache.players = { team, data: [], expiresAt: 0, inFlight: loadPromise };
+    return loadPromise;
+}
 
 function appUrl(path){
     if(window.ummaNav?.buildAppUrl){
@@ -214,12 +273,9 @@ async function renderLeagueViewSelect(team){
     const options = new Set();
     if(team?.league) options.add(team.league);
     const teamName = team.teamName || team.name || "";
-    const [homeFixtures, awayFixtures] = await Promise.all([
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("home", "==", teamName))),
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("away", "==", teamName)))
-    ]);
-    [...homeFixtures.docs, ...awayFixtures.docs].forEach((d)=>{
-        const league = d.data()?.league;
+    const fixtures = await getTeamFixtures(teamName);
+    fixtures.forEach((f)=>{
+        const league = f.league;
         if(league) options.add(league);
     });
 
@@ -255,8 +311,7 @@ async function renderPlayers(){
     const clubName = getCurrentClub();
     const body = document.getElementById("clubPlayersBody");
     if(!clubName || !body) return;
-    const snap = await getDocs(query(collection(window.ummaFire.db, "players"), where("team", "==", clubName)));
-    const players = snap.docs.map((d)=> d.data()).sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+    const players = (await getTeamPlayers(clubName)).sort((a,b)=> String(a.name).localeCompare(String(b.name)));
     body.innerHTML = "";
     players.forEach((p)=>{
         const tr = document.createElement("tr");
@@ -280,6 +335,7 @@ async function addPlayer(){
             ownerUid: currentUser?.uid || null,
             updatedAtMs: Date.now()
         }, { merge: true });
+        invalidateClubCache("players");
         if(input) input.value = "";
         await renderPlayers();
         await renderSquadPlayerChecks();
@@ -295,6 +351,7 @@ async function removePlayer(playerName){
     const id = `${slug(clubName)}__${slug(playerName)}`;
     try{
         await deleteDoc(doc(window.ummaFire.db, "players", id));
+        invalidateClubCache("players");
         await renderPlayers();
         await renderSquadPlayerChecks();
     } catch(err){
@@ -309,11 +366,7 @@ async function renderSquadFixtureSelect(){
     const clubName = getCurrentClub();
     if(!clubName) return;
 
-    const [homeSnap, awaySnap] = await Promise.all([
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("home", "==", clubName))),
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("away", "==", clubName)))
-    ]);
-    const fixtures = [...homeSnap.docs, ...awaySnap.docs].map((d)=> ({ id: d.id, ...d.data() }))
+    const fixtures = (await getTeamFixtures(clubName))
         .filter((f)=> !currentLeagueView || f.league === currentLeagueView)
         .sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
 
@@ -331,8 +384,8 @@ async function renderSquadPlayerChecks(){
     const clubName = getCurrentClub();
     if(!clubName) return;
 
-    const players = await getDocs(query(collection(window.ummaFire.db, "players"), where("team", "==", clubName)));
-    const names = players.docs.map((d)=> d.data()?.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    const players = await getTeamPlayers(clubName);
+    const names = players.map((p)=> p.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
     host.innerHTML = "";
     names.forEach((name)=>{
         const row = document.createElement("label");
@@ -383,6 +436,7 @@ async function saveSquadOfWeek(){
         const nextSquads = { ...(fixture.squads || {}) };
         nextSquads[clubName] = { starters, subs, weekLabel, updatedAtMs: Date.now() };
         await setDoc(fixtureRef, { squads: nextSquads, updatedAtMs: Date.now() }, { merge: true });
+        invalidateClubCache("fixtures");
         alert("Squad of the week saved.");
         await renderSotwHistory();
     } catch(err){
@@ -402,12 +456,7 @@ async function renderClubFixtures(){
     const clubName = getCurrentClub();
     if(!clubName) return;
 
-    const [homeSnap, awaySnap] = await Promise.all([
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("home", "==", clubName))),
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("away", "==", clubName)))
-    ]);
-    const fixtures = [...homeSnap.docs, ...awaySnap.docs]
-        .map((d)=> d.data())
+    const fixtures = (await getTeamFixtures(clubName))
         .filter((f)=> !currentLeagueView || f.league === currentLeagueView)
         .sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
 
@@ -444,11 +493,7 @@ async function renderSotwHistory(){
     const clubName = getCurrentClub();
     if(!clubName) return;
 
-    const [homeSnap, awaySnap] = await Promise.all([
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("home", "==", clubName))),
-        getDocs(query(collection(window.ummaFire.db, "fixtures"), where("away", "==", clubName)))
-    ]);
-    const fixtures = [...homeSnap.docs, ...awaySnap.docs].map((d)=> ({ id: d.id, ...d.data() }));
+    const fixtures = await getTeamFixtures(clubName);
     const records = fixtures
         .filter((f)=> !currentLeagueView || f.league === currentLeagueView)
         .map((f)=>{

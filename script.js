@@ -23,16 +23,76 @@ function slug(value){
         .replace(/^-+|-+$/g, "") || "item";
 }
 
-// Firestore collection fetch helper
-async function fetchCollection(name){
-    if(!window.ummaFire || !window.ummaFire.db) return [];
-    try{
-        const snap = await getDocs(collection(window.ummaFire.db, name));
-        return snap.docs.map(d=>d.data());
-    } catch(err){
-        console.error('fetchCollection', name, err);
-        return [];
+// Firestore fetch cache to reduce repeated reads across UI renders.
+const COLLECTION_CACHE_TTL_MS = 5000;
+const collectionCache = new Map();
+const collectionInFlight = new Map();
+
+function invalidateCollectionCache(name){
+    if(name){
+        collectionCache.delete(String(name));
+        collectionInFlight.delete(String(name));
+        return;
     }
+    collectionCache.clear();
+    collectionInFlight.clear();
+}
+
+async function fetchCollection(name, options = {}){
+    if(!window.ummaFire || !window.ummaFire.db) return [];
+    const key = String(name || '');
+    const force = Boolean(options.force);
+    const now = Date.now();
+    const cached = collectionCache.get(key);
+    if(!force && cached && cached.expiresAt > now){
+        return cached.data;
+    }
+    if(!force && collectionInFlight.has(key)){
+        return collectionInFlight.get(key);
+    }
+    const fetchPromise = (async ()=>{
+        try{
+            const snap = await getDocs(collection(window.ummaFire.db, key));
+            const data = snap.docs.map(d=>d.data());
+            collectionCache.set(key, { data, expiresAt: Date.now() + COLLECTION_CACHE_TTL_MS });
+            return data;
+        } catch(err){
+            console.error('fetchCollection', key, err);
+            return [];
+        } finally {
+            collectionInFlight.delete(key);
+        }
+    })();
+    collectionInFlight.set(key, fetchPromise);
+    return fetchPromise;
+}
+
+let semesterCalendarCache = { value: null, expiresAt: 0, inFlight: null };
+async function getSemesterCalendar(options = {}){
+    if(!window.ummaFire?.db) return null;
+    const force = Boolean(options.force);
+    const now = Date.now();
+    if(!force && semesterCalendarCache.value && semesterCalendarCache.expiresAt > now){
+        return semesterCalendarCache.value;
+    }
+    if(!force && semesterCalendarCache.inFlight){
+        return semesterCalendarCache.inFlight;
+    }
+    const loadPromise = (async ()=>{
+        try{
+            const calData = await getDocs(query(collection(window.ummaFire.db, 'semesterCalendar')));
+            const calendar = calData.docs.length > 0 ? calData.docs[0].data() : null;
+            semesterCalendarCache.value = calendar;
+            semesterCalendarCache.expiresAt = Date.now() + COLLECTION_CACHE_TTL_MS;
+            return calendar;
+        } catch {
+            return null;
+        } finally {
+            semesterCalendarCache.inFlight = null;
+        }
+    })();
+    semesterCalendarCache.inFlight = loadPromise;
+    return loadPromise;
 }
 
 function readPersistentValue(key){
@@ -93,6 +153,8 @@ function storageSet(key, value){
     } else {
         writePersistentValue(key, str);
     }
+    invalidateCollectionCache();
+    semesterCalendarCache = { value: null, expiresAt: 0, inFlight: null };
 }
 
 function appUrl(path){
@@ -189,15 +251,17 @@ async function init(){
     await renderLeagueSelect();
     await populateRegisterLeagueSelect();
     updateRegistrationPaymentUI();
-    await renderStandings();
-    await renderFixtures();
-    await renderRegisteredTeams();
+    await Promise.all([
+        renderStandings(),
+        renderFixtures(),
+        renderRegisteredTeams(),
+        renderHomeHighlights()
+    ]);
     bindAuthUI();
     openLoginModalFromHash();
     await bindAdminUI();
     bindSquadUI();
     updateHeroLeagueHeading();
-    await renderHomeHighlights();
     openTabFromHash();
     initRegistrationMetaFields();
     startRemoteSubscription();
@@ -456,13 +520,10 @@ function initRegistrationMetaFields(){
     if(!semesterInput || semesterInput.value) return;
     // Fetch semester calendar from Firestore asynchronously
     if(window.ummaFire && window.ummaFire.db){
-        getDocs(query(collection(window.ummaFire.db, 'semesterCalendar')))
-            .then(snap=>{
-                if(snap.docs.length > 0){
-                    const cal = snap.docs[0].data();
-                    if(cal?.start && cal?.end){
-                        semesterInput.value = `${cal.start} to ${cal.end}`;
-                    }
+        getSemesterCalendar()
+            .then((cal)=>{
+                if(cal?.start && cal?.end){
+                    semesterInput.value = `${cal.start} to ${cal.end}`;
                 }
             })
             .catch(err=> console.error('semester calendar fetch failed', err));
@@ -573,11 +634,7 @@ async function renderStandings(){
 async function renderFixtures(options = {}){
     const list = document.getElementById('fixturesList');
     let fixtures = await fetchCollection('fixtures');
-    let calendar = null;
-    try{
-        const calData = await getDocs(query(collection(window.ummaFire.db, 'semesterCalendar')));
-        if(calData.docs.length > 0) calendar = calData.docs[0].data();
-    } catch {}
+    const calendar = await getSemesterCalendar();
     const selected = document.getElementById('leagueSelect').value;
     const allLeagues = Boolean(options.allLeagues || showAllLeaguesFixtures);
     list.innerHTML = '';
@@ -780,16 +837,22 @@ function applyRemoteState(remote){
 
 function startRemoteSubscription(){
     if(!window.ummaRemoteStore?.subscribeState) return;
+    let refreshTimer = null;
     window.ummaRemoteStore.subscribeState((remote)=>{
         applyRemoteState(remote);
-        renderLeagueSelect();
-        populateRegisterLeagueSelect();
-        updateRegistrationPaymentUI();
-        renderStandings();
-        renderFixtures();
-        renderRegisteredTeams();
-        renderLeagueInfo();
-        renderHomeHighlights();
+        invalidateCollectionCache();
+        semesterCalendarCache = { value: null, expiresAt: 0, inFlight: null };
+        if(refreshTimer) clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(()=>{
+            renderLeagueSelect();
+            populateRegisterLeagueSelect();
+            updateRegistrationPaymentUI();
+            renderStandings();
+            renderFixtures();
+            renderRegisteredTeams();
+            renderLeagueInfo();
+            renderHomeHighlights();
+        }, 180);
     });
 }
 
@@ -881,11 +944,7 @@ async function renderHomeHighlights(){
     const leagues = HARDCODED_LEAGUES;
     const teams = await fetchCollection('teams');
     const fixtures = await fetchCollection('fixtures');
-    let calendar = null;
-    try{
-        const calData = await getDocs(query(collection(window.ummaFire.db, 'semesterCalendar')));
-        if(calData.docs.length > 0) calendar = calData.docs[0].data();
-    } catch {}
+    const calendar = await getSemesterCalendar();
     const selectedLeague = document.getElementById('leagueSelect')?.value || '';
 
     const visibleFixtures = fixtures.filter((f)=>{
