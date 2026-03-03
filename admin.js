@@ -167,8 +167,6 @@ function applyRemoteState(remote){
 async function ensureDefaultLeaguesInFirebase(){
     if(!window.ummaFire?.db) return;
     try{
-        const leagues = await fetchCollectionFromDb('leagues');
-        if(leagues.length > 0) return;
         await Promise.all(ADMIN_DEFAULT_LEAGUES.map((league)=>
             setDoc(doc(window.ummaFire.db, 'leagues', league.id), {
                 id: league.id,
@@ -783,6 +781,9 @@ function populateTeamLeagueFilter(){
     const leagueSet = new Set(
         getJSON('leagues', []).map((l)=> l.name).filter(Boolean)
     );
+    ADMIN_DEFAULT_LEAGUES.forEach((league)=>{
+        if(league?.name) leagueSet.add(league.name);
+    });
     getJSON('teams', []).forEach((t)=>{
         const leagueName = String(t?.league || '').trim();
         if(leagueName) leagueSet.add(leagueName);
