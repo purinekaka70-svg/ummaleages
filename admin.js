@@ -113,6 +113,33 @@ function normalizeTeamRow(raw = {}){
     };
 }
 
+function normalizeLeagueRow(raw = {}){
+    const name = String(raw.name || raw.league || raw.leagueName || raw.id || '').trim();
+    return {
+        ...raw,
+        id: String(raw.id || slugify(name || 'league')),
+        name,
+        desc: String(raw.desc || raw.description || '').trim()
+    };
+}
+
+function getLeagueNames(){
+    const names = new Set();
+    getJSON('leagues', [])
+        .map((l)=> normalizeLeagueRow(l).name)
+        .filter(Boolean)
+        .forEach((n)=> names.add(n));
+    getJSON('teams', [])
+        .map((t)=> String(t?.league || '').trim())
+        .filter(Boolean)
+        .forEach((n)=> names.add(n));
+    getJSON('fixtures', [])
+        .map((f)=> String(f?.league || '').trim())
+        .filter(Boolean)
+        .forEach((n)=> names.add(n));
+    return [...names].sort((a,b)=> String(a).localeCompare(String(b)));
+}
+
 async function hydrateCollectionsFromFirestore(){
     if(!window.ummaFire?.db) return false;
     try{
@@ -125,7 +152,7 @@ async function hydrateCollectionsFromFirestore(){
             getDocs(collection(window.ummaFire.db, 'users'))
         ]);
 
-        const leagues = leaguesSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const leagues = leaguesSnap.docs.map((d)=> normalizeLeagueRow({ id: d.id, ...(d.data() || {}) })).filter((l)=> l.name);
         const teams = teamsSnap.docs.map((d)=> normalizeTeamRow({ id: d.id, ...(d.data() || {}) })).filter((t)=> t.teamName);
         const fixtures = fixturesSnap.docs.map((d)=> ({ id: (d.data() || {}).id ?? d.id, ...(d.data() || {}) }));
         const standings = standingsSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
@@ -302,6 +329,7 @@ function bindAdminActions(){
     const awayGoalBtn = document.getElementById('awayGoalBtn');
     const undoGoalBtn = document.getElementById('undoGoalBtn');
     const refreshResultsBtn = document.getElementById('refreshResultsBtn');
+    const resultLeagueInput = document.getElementById('resultLeagueInput');
     const resultFixtureInput = document.getElementById('resultFixtureInput');
     const carryQualifiedBtn = document.getElementById('carryQualifiedBtn');
     const finishPremierBtn = document.getElementById('finishPremierBtn');
@@ -333,6 +361,10 @@ function bindAdminActions(){
     });
     if(fixtureDateInput) fixtureDateInput.addEventListener('change', updateManualDayPreview);
     if(planLeagueInput) planLeagueInput.addEventListener('change', renderPlannerHints);
+    if(resultLeagueInput) resultLeagueInput.addEventListener('change', ()=>{
+        populateResultFixtureInputs();
+        renderResultFixtureContext();
+    });
     if(resultFixtureInput) resultFixtureInput.addEventListener('change', renderResultFixtureContext);
     if(saveResultBtn) saveResultBtn.addEventListener('click', saveFixtureResult);
     if(saveHalfTimeBtn) saveHalfTimeBtn.addEventListener('click', saveHalfTimeResult);
@@ -651,7 +683,7 @@ function renderTeamsByLeagueDirectory(){
     if(!host) return;
     const teams = getJSON('teams', []);
     const clubAccounts = getJSON('accounts', []).filter((a)=> a.role === 'club');
-    const leagues = getJSON('leagues', []).map((l)=> l.name);
+    const leagues = getLeagueNames();
     const grouped = {};
 
     leagues.forEach((name)=>{ grouped[name] = []; });
@@ -699,7 +731,10 @@ function renderStats(){
 function renderLeagueTable(){
     const body = document.getElementById('adminLeaguesBody');
     if(!body) return;
-    const leagues = getJSON('leagues', []);
+    const leagues = getJSON('leagues', [])
+        .map((l)=> normalizeLeagueRow(l))
+        .filter((l)=> l.name)
+        .sort((a,b)=> String(a.name).localeCompare(String(b.name)));
     body.innerHTML = '';
     leagues.forEach((l)=>{
         const tr = document.createElement('tr');
@@ -720,7 +755,7 @@ function renderLeagueTable(){
 function populateTeamLeagueFilter(){
     const sel = document.getElementById('adminTeamLeagueFilter');
     if(!sel) return;
-    const leagues = getJSON('leagues', []).map((l)=> l.name).filter(Boolean).sort((a,b)=> String(a).localeCompare(String(b)));
+    const leagues = getLeagueNames();
     const previous = sel.value || '__all__';
     sel.innerHTML = '';
     sel.appendChild(new Option('All Leagues', '__all__'));
@@ -792,7 +827,7 @@ function renderFixtureTable(){
 }
 
 function populateFixtureInputs(){
-    const leagues = getJSON('leagues', []);
+    const leagues = getLeagueNames().map((name)=> ({ name }));
     const leagueSel = document.getElementById('fixtureLeagueInput');
     const planLeagueSel = document.getElementById('planLeagueInput');
     const currentFixtureLeague = leagueSel?.value || '';
@@ -1032,11 +1067,26 @@ function planFixturesForLeagues(leagueNames, cal, teams){
 }
 
 function populateResultFixtureInputs(){
+    const resultLeagueSel = document.getElementById('resultLeagueInput');
     const fixtureSel = document.getElementById('resultFixtureInput');
     const hint = document.getElementById('resultHint');
     if(!fixtureSel) return;
-    const fixtures = getJSON('fixtures', [])
+    const allFixtures = getJSON('fixtures', [])
         .sort((a,b)=> String(a.date).localeCompare(String(b.date)));
+    const leagueNames = getLeagueNames();
+    if(resultLeagueSel){
+        const previousLeague = resultLeagueSel.value || '__all__';
+        resultLeagueSel.innerHTML = '';
+        resultLeagueSel.appendChild(new Option('All Leagues', '__all__'));
+        leagueNames.forEach((league)=> resultLeagueSel.appendChild(new Option(league, league)));
+        if(leagueNames.includes(previousLeague) || previousLeague === '__all__'){
+            resultLeagueSel.value = previousLeague;
+        } else {
+            resultLeagueSel.value = '__all__';
+        }
+    }
+    const selectedLeague = resultLeagueSel?.value || '__all__';
+    const fixtures = allFixtures.filter((f)=> selectedLeague === '__all__' || String(f.league || '') === selectedLeague);
     const prev = fixtureSel.value;
     fixtureSel.innerHTML = '';
     fixtures.forEach((f)=>{
