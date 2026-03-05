@@ -802,7 +802,9 @@ async function renderFixtures(){
     }
     visibleFixtures.forEach((f)=>{
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${f.league || currentLeague}</strong> - ${f.home} vs ${f.away}`;
+        li.innerHTML = currentPlayer
+            ? `<strong>${f.home}</strong> vs <strong>${f.away}</strong>`
+            : `<strong>${f.league || currentLeague}</strong> - ${f.home} vs ${f.away}`;
         host.appendChild(li);
     });
 }
