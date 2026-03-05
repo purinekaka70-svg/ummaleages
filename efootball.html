@@ -103,6 +103,9 @@
             <h3>My Matches (Submit Result)</h3>
             <p id="efResultMonitorNotice" class="muted">Results are monitored. Posting incorrect scores may lead to disqualification.</p>
             <div style="margin-top:8px">
+                <select id="efPostLeagueSelect"></select>
+            </div>
+            <div style="margin-top:8px">
                 <select id="efResultFixtureInput"></select>
             </div>
             <div class="grid" style="margin-top:8px">
@@ -111,8 +114,7 @@
                 <input id="efResultOutcomeInput" placeholder="Outcome" readonly>
             </div>
             <div class="grid" style="margin-top:8px">
-                <input id="efHomeGoalsInput" type="number" min="0" placeholder="Home Goals">
-                <input id="efAwayGoalsInput" type="number" min="0" placeholder="Away Goals">
+                <input id="efFullTimeInput" placeholder="Full Time Score (e.g. 2-1, draw, lose)">
                 <button id="efSaveResultBtn" class="btn btn-primary" type="button">Save Full Time</button>
             </div>
             <div id="efResultHint" class="muted" style="margin-top:8px"></div>

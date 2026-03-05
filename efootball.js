@@ -301,6 +301,7 @@ function applyLeagueOptions(leagues){
     const viewSelect = document.getElementById("efLeagueView");
     const fixturesSelect = document.getElementById("efFixturesLeagueView");
     const resultsSelect = document.getElementById("efResultsLeagueView");
+    const postLeagueSelect = document.getElementById("efPostLeagueSelect");
     const safeLeagues = Array.isArray(leagues) ? leagues : [];
 
     if(regSelect){
@@ -351,11 +352,23 @@ function applyLeagueOptions(leagues){
             resultsSelect.value = safeLeagues[0].name;
         }
     }
+    if(postLeagueSelect){
+        const previous = postLeagueSelect.value || "";
+        postLeagueSelect.innerHTML = "";
+        safeLeagues.forEach((league)=> postLeagueSelect.appendChild(new Option(league.name, league.name)));
+        if(previous && safeLeagues.some((league)=> league.name === previous)){
+            postLeagueSelect.value = previous;
+        } else if(currentLeague && safeLeagues.some((league)=> league.name === currentLeague)){
+            postLeagueSelect.value = currentLeague;
+        } else if(safeLeagues.length){
+            postLeagueSelect.value = safeLeagues[0].name;
+        }
+    }
 }
 
 function syncLeagueSelectors(league){
     const value = String(league || "");
-    const ids = ["efLeagueView", "efFixturesLeagueView", "efResultsLeagueView"];
+    const ids = ["efLeagueView", "efFixturesLeagueView", "efResultsLeagueView", "efPostLeagueSelect"];
     ids.forEach((id)=>{
         const sel = document.getElementById(id);
         if(!sel) return;
@@ -374,7 +387,7 @@ function setMenuModeForAuth(){
     const loginBtn = document.getElementById("efMenuLoginBtn");
     const registerBtn = document.getElementById("efMenuRegisterBtn");
     if(fixturesBtn){
-        fixturesBtn.textContent = hasPlayerProfile ? "My Fixtures" : "Fixtures";
+        fixturesBtn.textContent = "Fixtures";
         fixturesBtn.dataset.target = "efFixturesSection";
     }
     if(resultsBtn){
@@ -446,6 +459,11 @@ function bindUi(){
     document.getElementById("efLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efFixturesLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efResultsLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
+    document.getElementById("efPostLeagueSelect")?.addEventListener("change", async (e)=> {
+        currentLeague = String(e.target.value || "");
+        syncLeagueSelectors(currentLeague);
+        await renderMyMatches();
+    });
     document.getElementById("efLeagueSelect")?.addEventListener("change", updateEfootballRegistrationPaymentUI);
     document.getElementById("efResultFixtureInput")?.addEventListener("change", renderMyResultFixtureContext);
     document.getElementById("efSaveResultBtn")?.addEventListener("click", saveMyResultFromPanel);
@@ -502,7 +520,7 @@ function applyMenuView(target){
     if(fixturesSection) fixturesSection.style.display = showFixtures ? "block" : "none";
     if(resultsSection) resultsSection.style.display = showResults ? "block" : "none";
     if(standingsSection) standingsSection.style.display = showStandings ? "block" : "none";
-    if(myMatchesCard) myMatchesCard.style.display = ((showFixtures || showPostResults) && currentPlayer) ? "block" : "none";
+    if(myMatchesCard) myMatchesCard.style.display = (showPostResults && currentPlayer) ? "block" : "none";
 }
 
 async function ensureLeagues(){
@@ -836,22 +854,17 @@ async function renderFixtures(){
     const host = document.getElementById("efFixturesList");
     if(!host) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
-    const visibleFixtures = currentPlayer
-        ? fixtures.filter((f)=> sameName(f.home, currentPlayer.playerName) || sameName(f.away, currentPlayer.playerName))
-        : fixtures;
+    const visibleFixtures = fixtures;
     host.innerHTML = "";
     if(visibleFixtures.length === 0){
         const leagueLabel = currentLeague ? currentLeague : "all leagues";
-        host.innerHTML = currentPlayer
-            ? `<li class="muted">No personal fixtures in ${leagueLabel} yet.</li>`
-            : `<li class="muted">No fixtures in ${leagueLabel} yet.</li>`;
+        host.innerHTML = `<li class="muted">No fixtures in ${leagueLabel} yet.</li>`;
         return;
     }
     visibleFixtures.forEach((f)=>{
         const li = document.createElement("li");
-        li.innerHTML = currentPlayer
-            ? `<strong>${f.home}</strong> vs <strong>${f.away}</strong>`
-            : `<strong>${f.league || currentLeague}</strong> - ${f.home} vs ${f.away}`;
+        const mine = currentPlayer && (sameName(f.home, currentPlayer.playerName) || sameName(f.away, currentPlayer.playerName));
+        li.innerHTML = `<strong>${f.home}</strong> vs <strong>${f.away}</strong>${mine ? ' <span class="muted">(My Fixture)</span>' : ''}`;
         host.appendChild(li);
     });
 }
@@ -957,15 +970,13 @@ async function renderMyResultFixtureContext(){
     const scoreInput = document.getElementById("efCurrentScoreInput");
     const statusInput = document.getElementById("efCurrentStatusInput");
     const outcomeInput = document.getElementById("efResultOutcomeInput");
-    const homeInput = document.getElementById("efHomeGoalsInput");
-    const awayInput = document.getElementById("efAwayGoalsInput");
+    const fullTimeInput = document.getElementById("efFullTimeInput");
     const hint = document.getElementById("efResultHint");
     if(!fixture){
         if(scoreInput) scoreInput.value = "";
         if(statusInput) statusInput.value = "";
         if(outcomeInput) outcomeInput.value = "";
-        if(homeInput) homeInput.value = "";
-        if(awayInput) awayInput.value = "";
+        if(fullTimeInput) fullTimeInput.value = "";
         if(hint) hint.textContent = mine.length ? "Select a fixture to post result." : "No personal fixtures available in this league.";
         return;
     }
@@ -974,11 +985,30 @@ async function renderMyResultFixtureContext(){
     if(scoreInput) scoreInput.value = hasScore ? `${fixture.home} ${score.homeGoals} - ${score.awayGoals} ${fixture.away}` : "No score yet";
     if(statusInput) statusInput.value = String(fixture.status || "Scheduled");
     if(outcomeInput) outcomeInput.value = hasScore ? getOutcomeFromScore(fixture, score) : "-";
-    if(homeInput) homeInput.value = hasScore ? String(score.homeGoals) : "";
-    if(awayInput) awayInput.value = hasScore ? String(score.awayGoals) : "";
+    if(fullTimeInput) fullTimeInput.value = hasScore ? `${score.homeGoals}-${score.awayGoals}` : "";
     if(hint){
         hint.textContent = `Fixture: ${fixture.home} vs ${fixture.away}. Save full-time to update standings.`;
     }
+}
+
+function parsePostScoreInput(raw, fixture){
+    const text = String(raw || "").trim().toLowerCase();
+    if(!text) return null;
+    const direct = text.match(/^(\d+)\s*-\s*(\d+)$/);
+    if(direct){
+        return { homeGoals: Number(direct[1]), awayGoals: Number(direct[2]) };
+    }
+    if(text === "draw"){
+        return { homeGoals: 0, awayGoals: 0 };
+    }
+    if(text === "win" || text === "lose"){
+        const isHomePlayer = sameName(fixture?.home, currentPlayer?.playerName);
+        if(text === "win"){
+            return isHomePlayer ? { homeGoals: 1, awayGoals: 0 } : { homeGoals: 0, awayGoals: 1 };
+        }
+        return isHomePlayer ? { homeGoals: 0, awayGoals: 1 } : { homeGoals: 1, awayGoals: 0 };
+    }
+    return null;
 }
 
 async function saveMyResultFromPanel(){
@@ -987,13 +1017,19 @@ async function saveMyResultFromPanel(){
         alert("Select a fixture.");
         return;
     }
-    const homeGoals = Number(document.getElementById("efHomeGoalsInput")?.value);
-    const awayGoals = Number(document.getElementById("efAwayGoalsInput")?.value);
-    if(!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals) || homeGoals < 0 || awayGoals < 0){
-        alert("Enter valid score values.");
+    const fixtures = await fetchFixturesByLeague(currentLeague);
+    const mine = fixtures.filter((f)=> sameName(f.home, currentPlayer?.playerName) || sameName(f.away, currentPlayer?.playerName));
+    const fixture = mine.find((f)=> String(f.id) === fixtureId) || null;
+    if(!fixture){
+        alert("Selected fixture not found.");
         return;
     }
-    await submitFixtureResult(fixtureId, homeGoals, awayGoals);
+    const parsed = parsePostScoreInput(document.getElementById("efFullTimeInput")?.value, fixture);
+    if(!parsed || !Number.isFinite(parsed.homeGoals) || !Number.isFinite(parsed.awayGoals) || parsed.homeGoals < 0 || parsed.awayGoals < 0){
+        alert("Enter score as 2-1, or use draw/win/lose.");
+        return;
+    }
+    await submitFixtureResult(fixtureId, parsed.homeGoals, parsed.awayGoals);
     alert("Result saved and standings updated.");
     await renderFixtures();
     await renderResults();
