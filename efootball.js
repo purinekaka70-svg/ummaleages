@@ -205,12 +205,13 @@ async function initEfootball(){
                 document.getElementById("efMyMatchesCard").style.display = "block";
                 closeLoginModal();
                 setAuthPanelVisible("");
+                currentMenuTarget = "efFixturesSection";
                 await renderAccount();
                 await renderFixtures();
                 await renderResults();
                 await renderStandings();
                 await renderMyMatches();
-                applyMenuView(currentMenuTarget);
+                applyMenuView("efFixturesSection");
             });
         }
     } finally {
