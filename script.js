@@ -1112,6 +1112,8 @@ async function loginClub(){
     const team = document.getElementById('loginTeam').value.trim();
     const email = document.getElementById('loginEmail')?.value.trim().toLowerCase() || '';
     const pass = document.getElementById('loginPassword').value;
+    const defaultAdminEmail = String(getDefaultAdminEmail() || '').toLowerCase();
+    const isDefaultAdminEmail = email === defaultAdminEmail;
     if(!email || !pass){
         alert('Enter email and password');
         return;
@@ -1134,6 +1136,12 @@ async function loginClub(){
             window.location.href = 'admin.html';
         }
     };
+
+    // Fast-path: default admin account should never be forced through club resolution.
+    if(isDefaultAdminEmail){
+        openAdmin();
+        return;
+    }
 
     let userTeam = '';
     let resolvedRole = '';
@@ -1184,6 +1192,12 @@ async function loginClub(){
     }
 
     if(resolvedRole === 'admin'){
+        openAdmin();
+        return;
+    }
+
+    // Safety fallback if Firestore role lookup fails but auth email is the default admin account.
+    if(isDefaultAdminEmail){
         openAdmin();
         return;
     }
