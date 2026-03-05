@@ -28,11 +28,11 @@
             </div>
         </div>
         <nav id="efMenuPanel" class="menu-panel">
-            <button type="button" class="menu-link" data-target="efFixturesSection">Fixtures</button>
-            <button type="button" class="menu-link" data-target="efResultsSection">Results</button>
-            <button type="button" class="menu-link" data-target="efStandingsSection">Standings</button>
+            <button id="efMenuFixturesBtn" type="button" class="menu-link" data-target="efFixturesSection">Fixtures</button>
+            <button id="efMenuResultsBtn" type="button" class="menu-link" data-target="efResultsSection">Results</button>
+            <button id="efMenuStandingsBtn" type="button" class="menu-link" data-target="efStandingsSection">Standings</button>
             <button type="button" id="efMenuLoginBtn" class="menu-link">Login</button>
-            <button type="button" class="menu-link" data-target="efRegisterCard">Register</button>
+            <button id="efMenuRegisterBtn" type="button" class="menu-link" data-target="efRegisterCard">Register</button>
         </nav>
     </header>
 
@@ -101,6 +101,7 @@
 
         <section id="efMyMatchesCard" class="card" style="display:none">
             <h3>My Matches (Submit Result)</h3>
+            <p id="efResultMonitorNotice" class="muted">Results are monitored. Posting incorrect scores may lead to disqualification.</p>
             <table class="table">
                 <thead>
                     <tr><th>Fixture</th><th>Score</th><th>Action</th></tr>

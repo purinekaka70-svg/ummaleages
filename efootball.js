@@ -172,6 +172,7 @@ async function initEfootball(){
                 currentUser = user || null;
                 if(!currentUser){
                     currentPlayer = null;
+                    setMenuModeForAuth();
                     document.getElementById("efLogoutBtn").style.display = "none";
                     document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
                     document.getElementById("efOpenLoginBtn").style.display = "inline-block";
@@ -186,6 +187,7 @@ async function initEfootball(){
                 }
                 await resolveCurrentPlayerWithRetry(2, 220);
                 if(!currentPlayer){
+                    setMenuModeForAuth();
                     document.getElementById("efLogoutBtn").style.display = "inline-block";
                     document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
                     document.getElementById("efOpenLoginBtn").style.display = "inline-block";
@@ -198,6 +200,7 @@ async function initEfootball(){
                     applyMenuView(currentMenuTarget);
                     return;
                 }
+                setMenuModeForAuth();
                 document.getElementById("efLogoutBtn").style.display = "inline-block";
                 document.getElementById("efOpenRegisterBtn").style.display = "none";
                 document.getElementById("efOpenLoginBtn").style.display = "none";
@@ -295,6 +298,29 @@ function syncLeagueSelectors(league){
     });
 }
 
+function setMenuModeForAuth(){
+    const isLoggedIn = Boolean(currentPlayer);
+    const fixturesBtn = document.getElementById("efMenuFixturesBtn");
+    const resultsBtn = document.getElementById("efMenuResultsBtn");
+    const standingsBtn = document.getElementById("efMenuStandingsBtn");
+    const loginBtn = document.getElementById("efMenuLoginBtn");
+    const registerBtn = document.getElementById("efMenuRegisterBtn");
+    if(fixturesBtn){
+        fixturesBtn.textContent = isLoggedIn ? "My Fixtures" : "Fixtures";
+        fixturesBtn.dataset.target = "efFixturesSection";
+    }
+    if(resultsBtn){
+        resultsBtn.textContent = isLoggedIn ? "Post Results" : "Results";
+        resultsBtn.dataset.target = isLoggedIn ? "efMyMatchesCard" : "efResultsSection";
+    }
+    if(standingsBtn){
+        standingsBtn.textContent = "Standings";
+        standingsBtn.dataset.target = "efStandingsSection";
+    }
+    if(loginBtn) loginBtn.style.display = isLoggedIn ? "none" : "inline-block";
+    if(registerBtn) registerBtn.style.display = isLoggedIn ? "none" : "inline-block";
+}
+
 function bindUi(){
     const menuBtn = document.getElementById("efMenuBtn");
     const menuPanel = document.getElementById("efMenuPanel");
@@ -353,6 +379,7 @@ function bindUi(){
     document.getElementById("efFixturesLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efResultsLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efLeagueSelect")?.addEventListener("change", updateEfootballRegistrationPaymentUI);
+    setMenuModeForAuth();
     applyMenuView(currentMenuTarget);
 }
 
@@ -398,13 +425,14 @@ function applyMenuView(target){
     const showFixtures = currentMenuTarget === "efFixturesSection";
     const showResults = currentMenuTarget === "efResultsSection";
     const showStandings = currentMenuTarget === "efStandingsSection";
+    const showPostResults = currentMenuTarget === "efMyMatchesCard";
 
     if(registerCard) registerCard.style.display = showRegister ? "block" : "none";
     if(leagueCard) leagueCard.style.display = showRegister ? "none" : "block";
     if(fixturesSection) fixturesSection.style.display = showFixtures ? "block" : "none";
     if(resultsSection) resultsSection.style.display = showResults ? "block" : "none";
     if(standingsSection) standingsSection.style.display = showStandings ? "block" : "none";
-    if(myMatchesCard) myMatchesCard.style.display = (showFixtures && currentPlayer) ? "block" : "none";
+    if(myMatchesCard) myMatchesCard.style.display = ((showFixtures || showPostResults) && currentPlayer) ? "block" : "none";
 }
 
 async function ensureLeagues(){
@@ -581,6 +609,7 @@ async function registerPlayer(){
                 updatedAtMs: Date.now()
             };
         }
+        setMenuModeForAuth();
         alert("Registered successfully. You are now logged in.");
         closeLoginModal();
         setAuthPanelVisible("");
@@ -729,13 +758,18 @@ async function renderFixtures(){
     const host = document.getElementById("efFixturesList");
     if(!host) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
+    const visibleFixtures = currentPlayer
+        ? fixtures.filter((f)=> f.home === currentPlayer.playerName || f.away === currentPlayer.playerName)
+        : fixtures;
     host.innerHTML = "";
-    if(fixtures.length === 0){
+    if(visibleFixtures.length === 0){
         const leagueLabel = currentLeague ? currentLeague : "all leagues";
-        host.innerHTML = `<li class="muted">No fixtures in ${leagueLabel} yet.</li>`;
+        host.innerHTML = currentPlayer
+            ? `<li class="muted">No personal fixtures in ${leagueLabel} yet.</li>`
+            : `<li class="muted">No fixtures in ${leagueLabel} yet.</li>`;
         return;
     }
-    fixtures.forEach((f)=>{
+    visibleFixtures.forEach((f)=>{
         const li = document.createElement("li");
         li.innerHTML = `<strong>${f.league || currentLeague}</strong> - ${f.home} vs ${f.away}`;
         host.appendChild(li);
