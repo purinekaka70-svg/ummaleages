@@ -1,9 +1,12 @@
+import { getDocs, collection } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+
 document.addEventListener('DOMContentLoaded', ()=>{ initAdmin(); });
 const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || window.__UMMA_DB__
     || (window.__UMMA_DB__ = {});
 const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
+let suppressRemoteSave = false;
 
 function loadingStart(message){
     ensureLoadingApi().start(message);
@@ -95,12 +98,74 @@ function syncMemoryStoreToPersistent(){
     });
 }
 
+function normalizeTeamRow(raw = {}){
+    const teamName = String(raw.teamName || raw.name || '').trim();
+    return {
+        ...raw,
+        teamName,
+        league: String(raw.league || raw.leagueName || '').trim(),
+        coachName: String(raw.coachName || '').trim(),
+        phone: String(raw.phone || '').trim(),
+        status: String(raw.status || 'Pending Payment').trim(),
+        paymentStatus: String(raw.paymentStatus || '').trim(),
+        mpesaRef: String(raw.mpesaRef || '').trim(),
+        feePaid: Number(raw.feePaid || 0)
+    };
+}
+
+async function hydrateCollectionsFromFirestore(){
+    if(!window.ummaFire?.db) return false;
+    try{
+        const [leaguesSnap, teamsSnap, fixturesSnap, standingsSnap, playersSnap, usersSnap] = await Promise.all([
+            getDocs(collection(window.ummaFire.db, 'leagues')),
+            getDocs(collection(window.ummaFire.db, 'teams')),
+            getDocs(collection(window.ummaFire.db, 'fixtures')),
+            getDocs(collection(window.ummaFire.db, 'standings')),
+            getDocs(collection(window.ummaFire.db, 'players')),
+            getDocs(collection(window.ummaFire.db, 'users'))
+        ]);
+
+        const leagues = leaguesSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const teams = teamsSnap.docs.map((d)=> normalizeTeamRow({ id: d.id, ...(d.data() || {}) })).filter((t)=> t.teamName);
+        const fixtures = fixturesSnap.docs.map((d)=> ({ id: (d.data() || {}).id ?? d.id, ...(d.data() || {}) }));
+        const standings = standingsSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const players = playersSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const accounts = usersSnap.docs.map((d)=>{
+            const row = d.data() || {};
+            return {
+                id: d.id,
+                uid: String(row.uid || d.id || ''),
+                email: String(row.email || '').trim().toLowerCase(),
+                role: String(row.role || 'club').trim().toLowerCase(),
+                team: String(row.team || row.teamName || '').trim()
+            };
+        });
+
+        suppressRemoteSave = true;
+        try{
+            setJSON('leagues', leagues);
+            setJSON('teams', teams);
+            setJSON('fixtures', fixtures);
+            setJSON('standings', standings);
+            setJSON('players', players);
+            setJSON('accounts', accounts);
+        } finally {
+            suppressRemoteSave = false;
+        }
+        return true;
+    } catch(err){
+        console.error('hydrateCollectionsFromFirestore error', err);
+        return false;
+    }
+}
+
 async function initAdmin(){
     loadingStart('Loading admin...');
     try{
         clearLegacyLocalTeamData();
         syncMemoryStoreToPersistent();
         await hydrateRemoteStore();
+        await hydrateCollectionsFromFirestore();
         await ensureAdminAuthSeed();
         ensureAdminSeed();
         ensureSemesterCalendarSeed();
@@ -186,7 +251,12 @@ function startRemoteSubscription(){
     window.ummaRemoteStore.subscribeState((remote)=>{
         applyRemoteState(remote);
         if(sessionStorage.getItem('adminAuth') === 'true'){
-            renderAllAdminData();
+            loadingStart('Syncing data...');
+            Promise.resolve(hydrateCollectionsFromFirestore())
+                .finally(()=>{
+                    renderAllAdminData();
+                    loadingEnd();
+                });
         }
     });
 }
@@ -242,7 +312,15 @@ function bindAdminActions(){
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
     const openEfootballPanelBtn = document.getElementById('openEfootballPanelBtn');
 
-    if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
+    if(refreshBtn) refreshBtn.addEventListener('click', async ()=>{
+        loadingStart('Refreshing admin data...');
+        try{
+            await hydrateCollectionsFromFirestore();
+            renderAllAdminData();
+        } finally {
+            loadingEnd();
+        }
+    });
     if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open('register.html', '_blank'));
     if(addLeagueBtn) addLeagueBtn.addEventListener('click', addLeague);
     if(addFixtureBtn) addFixtureBtn.addEventListener('click', addFixture);
@@ -1623,7 +1701,7 @@ function getJSON(key, fallback){
 function setJSON(key, value){
     const serialized = JSON.stringify(value);
     adminMemoryStore[key] = serialized;
-    if(window.ummaRemoteStore?.saveKey){
+    if(!suppressRemoteSave && window.ummaRemoteStore?.saveKey){
         window.ummaRemoteStore.saveKey(key, serialized);
     }
     if(isNonPersistentKey(key)){
