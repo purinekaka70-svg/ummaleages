@@ -4,16 +4,19 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Umma League</title>
-    <meta http-equiv="refresh" content="0; url=efootball.html" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <meta http-equiv="refresh" content="0; url=index.html#register" />
     <script>
-        const target = new URL("efootball.html", window.location.href);
+        const target = new URL("index.html", window.location.href);
         if(window.location.hash){
             target.hash = window.location.hash;
+        } else {
+            target.hash = "register";
         }
         window.location.replace(target.toString());
     </script>
 </head>
 <body>
-    <p>Redirecting to <a href="efootball.html">efootball.html</a>...</p>
+    <p>Redirecting to <a href="index.html#register">index.html#register</a>...</p>
 </body>
 </html>

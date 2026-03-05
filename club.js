@@ -2,29 +2,6 @@
 import { doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', ()=>{ initClubPortal(); });
-
-window.ummaAuth.onAuthStateChanged(async (user) => {
-    if (!user) {
-        clearCurrentClub();
-        window.location.href = 'register.html#login';
-        return;
-    }
-
-    const db = firebase.firestore(); // make sure Firestore is initialized
-
-    // 1️ Check if this user is an admin
-    const adminDoc = await db.collection("admins").doc(user.uid).get();
-
-    if (adminDoc.exists) {
-        //  Admin logged in
-        sessionStorage.setItem('adminAuth', 'true');
-        hydrateAdminView(); // show admin portal
-        return; //  stop club logic
-    }
-
-    // 2️ Normal club logic
-    initClubPortal();
-});
 // -------------------- LOCAL STORAGE CLUB --------------------
 function getCurrentClub(){
     try{
@@ -134,7 +111,7 @@ function bindClubEvents(){
 
     if(logoutBtn) logoutBtn.addEventListener('click', ()=>{
         clearCurrentClub();
-        window.location.href = 'register.html#login';
+        window.location.href = 'index.html#login';
     });
     if(saveInfoBtn) saveInfoBtn.addEventListener('click', saveClubInfo);
     if(addPlayerBtn) addPlayerBtn.addEventListener('click', addPlayer);
@@ -171,7 +148,7 @@ async function renderClubPortal(){
     const user = window.ummaAuth.getAuthUser();
     if(!user){
         clearCurrentClub();
-        window.location.href = 'register.html#login';
+        window.location.href = 'index.html#login';
         return;
     }
 
@@ -187,7 +164,7 @@ async function renderClubPortal(){
         let snap = await resolveTeamDoc();
         if(!snap || !snap.exists()){
             alert('Club profile not found');
-            window.location.href = 'register.html';
+            window.location.href = 'index.html#register';
             return;
         }
 
@@ -317,3 +294,4 @@ async function fetchCollection(name){
         return [];
     }
 }
+

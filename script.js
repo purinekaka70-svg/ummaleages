@@ -1034,97 +1034,68 @@ async function loginClub(){
         alert('Invalid email or password');
         return;
     }
-    
-    // Get the authenticated user's UID and resolve their team from Firestore
-    let userTeam = null;
+    const openAdmin = ()=>{
+        document.getElementById('loginModal').style.display = 'none';
+        sessionStorage.setItem('adminAuth', 'true');
+        const adminTab = window.open('admin.html', '_blank');
+        if(!adminTab){
+            window.location.href = 'admin.html';
+        }
+    };
+
+    let userTeam = '';
+    let resolvedRole = '';
     if(window.ummaFire && window.ummaFire.db){
         try{
             const currentUser = window.ummaAuth.getAuthUser();
-            const userId = currentUser ? currentUser.uid : slug(email);
-            const userSnap = await getDoc(doc(window.ummaFire.db, 'users', userId));
-            if(userSnap.exists()){
-                const userData = userSnap.data();
-                userTeam = userData.team || '';
-                console.log('User logged in:', userId, 'Team:', userTeam);
+            const userId = currentUser ? currentUser.uid : '';
+            if(userId){
+                const userSnap = await getDoc(doc(window.ummaFire.db, 'users', userId));
+                if(userSnap.exists()){
+                    const userData = userSnap.data() || {};
+                    resolvedRole = String(userData.role || '').toLowerCase();
+                    userTeam = String(userData.team || '');
+                }
+            }
+            if(!resolvedRole || !userTeam){
+                const matches = await getDocs(query(collection(window.ummaFire.db, 'users'), where('email', '==', email)));
+                const docs = matches.docs.map((d)=> d.data() || {});
+                const adminDoc = docs.find((d)=> String(d.role || '').toLowerCase() === 'admin');
+                if(adminDoc){
+                    resolvedRole = 'admin';
+                } else {
+                    const clubDocs = docs.filter((d)=> String(d.role || '').toLowerCase() === 'club' && String(d.team || '').trim());
+                    if(team){
+                        const exact = clubDocs.find((d)=> String(d.team || '').toLowerCase() === team.toLowerCase());
+                        if(exact){
+                            userTeam = String(exact.team || '');
+                            resolvedRole = 'club';
+                        }
+                    } else if(clubDocs.length === 1){
+                        userTeam = String(clubDocs[0].team || '');
+                        resolvedRole = 'club';
+                    }
+                }
             }
         } catch(err){
-            console.error('Firestore user lookup failed', err);
+            console.error('login resolution failed', err);
         }
     }
-    
-    // If team wasn't in Firestore, ask user for team name or check if they're admin
+
+    if(resolvedRole === 'admin'){
+        openAdmin();
+        return;
+    }
+
     if(!userTeam){
-        const accounts = await getAccounts();
-        const adminAcc = accounts.find((a)=>
-            a.role === 'admin'
-            && String(a.email || '').toLowerCase() === email
-        );
-        
-        if(adminAcc){
-            // Admin login
-            document.getElementById('loginModal').style.display = 'none';
-            sessionStorage.setItem('adminAuth', 'true');
-            const adminTab = window.open('admin.html', '_blank');
-            if(!adminTab){
-                window.location.href = 'admin.html';
-            }
-            return;
-        }
-        
-
-        
-     // Club login: if no team provided, try to auto-resolve
-if (!team) {
-
-    const user = firebase.auth().currentUser;
-
-    //  FIRST check if this user is an admin
-    if (user) {
-        const adminDoc = await firebase.firestore()
-            .collection("admins")
-            .doc(user.uid)
-            .get();
-
-        if (adminDoc.exists) {
-            //  STOP club logic completely
-            return;
-        }
-    }
-
-    const clubAccounts = accounts.filter((a) =>
-        a.role === 'club' && String(a.email || '').toLowerCase() === email
-    );
-
-    if (clubAccounts.length === 1) {
-        userTeam = clubAccounts[0].team;
-
-    } else if (clubAccounts.length > 1) {
-        alert('Multiple teams registered with this email. Please enter your team name.');
-        return;
-
-    } else {
-        alert('No team found for this email. Please register first.');
         await window.ummaAuth.logoutAuthUser();
+        alert('No club account found for this email. Register first or enter the correct team name.');
         return;
     }
 
-} else {
-    userTeam = team;
-}
-}
-
-
-
-    // Store current club in session and redirect
-    if(userTeam){
-        setCurrentClub(userTeam);
-        document.getElementById('loginModal').style.display = 'none';
-        console.log('Redirecting to club portal for team:', userTeam);
-        window.location.href = 'club.html';
-    } else {
-        await window.ummaAuth.logoutAuthUser();
-        alert('Could not resolve your team. Please contact support.');
-    }
+    setCurrentClub(userTeam);
+    document.getElementById('loginModal').style.display = 'none';
+    window.location.href = 'club.html';
 }
 
 async function logoutClub(){

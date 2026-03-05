@@ -83,7 +83,7 @@ async function initEfootball(){
             document.getElementById("efLogoutBtn").style.display = "inline-block";
             document.getElementById("efOpenRegisterBtn").style.display = "none";
             document.getElementById("efOpenLoginBtn").style.display = "none";
-            document.getElementById("efAccountCard").style.display = "none";
+            document.getElementById("efAccountCard").style.display = "block";
             document.getElementById("efMyMatchesCard").style.display = "block";
             closeLoginModal();
             setAuthPanelVisible("");
@@ -387,11 +387,16 @@ async function registerPlayer(){
     } catch(err){
         const code = String(err?.code || "");
         if(code.includes("email-already-in-use")){
-            alert("Email already in use.");
+            try{
+                await window.ummaAuth.loginAuthUser(email, password);
+            } catch {
+                alert("This email already exists. Use the same password from main site login.");
+                return;
+            }
         } else {
             alert("Could not create account.");
+            return;
         }
-        return;
     }
 
     const user = window.ummaAuth.getAuthUser();
@@ -429,6 +434,10 @@ async function registerPlayer(){
     await createFixturesForNewPlayer(playerName, league);
     alert("Registered successfully. You are now logged in.");
     await resolveCurrentPlayer();
+    closeLoginModal();
+    setAuthPanelVisible("");
+    applyMenuView("efFixturesSection");
+    scrollToSection("efAccountCard");
     await renderAccount();
     await renderFixtures();
     await renderResults();

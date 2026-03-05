@@ -34,7 +34,8 @@ body{
   align-items:center;
   gap:10px;
 }
-.brand{font-size:20px;font-weight:700;color:var(--gold)}
+.brand{display:flex;align-items:center;gap:8px;font-size:20px;font-weight:700;color:var(--gold)}
+.brand-logo{width:28px;height:28px;display:block;object-fit:contain}
 .back-link{color:#fff;text-decoration:none;font-weight:600}
 .hamburger{
   border:1px solid rgba(255,255,255,0.25);
