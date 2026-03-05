@@ -102,8 +102,28 @@ async function resolveCurrentPlayerWithRetry(retries = 2, waitMs = 200){
 }
 
 function scoreText(result){
-    if(!result || !Number.isFinite(Number(result.homeGoals)) || !Number.isFinite(Number(result.awayGoals))) return "-";
-    return `${Number(result.homeGoals)} - ${Number(result.awayGoals)}`;
+    const score = extractFixtureScore(result);
+    if(!Number.isFinite(score.homeGoals) || !Number.isFinite(score.awayGoals)) return "-";
+    return `${Number(score.homeGoals)} - ${Number(score.awayGoals)}`;
+}
+
+function extractFixtureScore(result){
+    if(!result) return { homeGoals: NaN, awayGoals: NaN };
+    if(result.fullTime && Number.isFinite(Number(result.fullTime.homeGoals)) && Number.isFinite(Number(result.fullTime.awayGoals))){
+        return { homeGoals: Number(result.fullTime.homeGoals), awayGoals: Number(result.fullTime.awayGoals) };
+    }
+    if(Number.isFinite(Number(result.homeGoals)) && Number.isFinite(Number(result.awayGoals))){
+        return { homeGoals: Number(result.homeGoals), awayGoals: Number(result.awayGoals) };
+    }
+    return { homeGoals: NaN, awayGoals: NaN };
+}
+
+function getOutcomeFromScore(fixture, score){
+    const homeGoals = Number(score?.homeGoals);
+    const awayGoals = Number(score?.awayGoals);
+    if(homeGoals > awayGoals) return `${fixture.home} Win`;
+    if(awayGoals > homeGoals) return `${fixture.away} Win`;
+    return "Draw";
 }
 
 function getLeagueByName(name){
@@ -781,9 +801,9 @@ async function renderResults(){
     if(!host || !currentLeague) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
     const played = fixtures.filter((fixture)=>{
-        const homeGoals = Number(fixture?.result?.homeGoals);
-        const awayGoals = Number(fixture?.result?.awayGoals);
-        return Number.isFinite(homeGoals) && Number.isFinite(awayGoals);
+        const score = extractFixtureScore(fixture?.result);
+        if(!Number.isFinite(score.homeGoals) || !Number.isFinite(score.awayGoals)) return false;
+        return true;
     });
     host.innerHTML = "";
     if(played.length === 0){
@@ -792,7 +812,8 @@ async function renderResults(){
     }
     played.forEach((fixture)=>{
         const li = document.createElement("li");
-        li.innerHTML = `<strong>${fixture.league || currentLeague}</strong> - ${fixture.home} ${scoreText(fixture.result)} ${fixture.away}`;
+        const score = extractFixtureScore(fixture.result);
+        li.innerHTML = `<strong>${fixture.league || currentLeague}</strong> - ${fixture.home} ${score.homeGoals}-${score.awayGoals} ${fixture.away} <span class="muted">(${getOutcomeFromScore(fixture, score)})</span>`;
         host.appendChild(li);
     });
 }
@@ -876,8 +897,9 @@ async function recomputeStandings(league){
     const fixtures = await fetchFixturesByLeague(league);
     fixtures.forEach((f)=>{
         if(!f?.result) return;
-        const hg = Number(f.result.homeGoals);
-        const ag = Number(f.result.awayGoals);
+        const score = extractFixtureScore(f.result);
+        const hg = Number(score.homeGoals);
+        const ag = Number(score.awayGoals);
         if(!Number.isFinite(hg) || !Number.isFinite(ag)) return;
         if(!table[f.home]) table[f.home] = { league, player: f.home, p:0, w:0, d:0, l:0, gd:0, pts:0 };
         if(!table[f.away]) table[f.away] = { league, player: f.away, p:0, w:0, d:0, l:0, gd:0, pts:0 };
