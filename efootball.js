@@ -90,6 +90,14 @@ function normalizeEmail(value){
     return String(value || "").trim().toLowerCase();
 }
 
+function normalizeName(value){
+    return String(value || "").trim().toLowerCase();
+}
+
+function sameName(a, b){
+    return normalizeName(a) === normalizeName(b);
+}
+
 async function resolveCurrentPlayerWithRetry(retries = 2, waitMs = 200){
     for(let attempt = 0; attempt <= retries; attempt += 1){
         await resolveCurrentPlayer();
@@ -176,6 +184,8 @@ async function cachedEfRead(key, loader, options = {}){
 async function initEfootball(){
     loadingStart('Initializing E-Football...');
     try{
+        document.getElementById("efOpenRegisterBtn").style.display = "none";
+        document.getElementById("efOpenLoginBtn").style.display = "none";
         bindUi();
         applyLeagueOptions(EF_LEAGUES);
         await ensureLeagues();
@@ -780,7 +790,7 @@ async function renderFixtures(){
     if(!host) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
     const visibleFixtures = currentPlayer
-        ? fixtures.filter((f)=> f.home === currentPlayer.playerName || f.away === currentPlayer.playerName)
+        ? fixtures.filter((f)=> sameName(f.home, currentPlayer.playerName) || sameName(f.away, currentPlayer.playerName))
         : fixtures;
     host.innerHTML = "";
     if(visibleFixtures.length === 0){
@@ -823,10 +833,10 @@ async function renderMyMatches(){
     const body = document.getElementById("efMyMatchesBody");
     if(!body || !currentPlayer || !currentLeague) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
-    const mine = fixtures.filter((f)=> f.home === currentPlayer.playerName || f.away === currentPlayer.playerName);
+    const mine = fixtures.filter((f)=> sameName(f.home, currentPlayer.playerName) || sameName(f.away, currentPlayer.playerName));
     body.innerHTML = "";
     if(mine.length === 0){
-        body.innerHTML = '<tr><td colspan="3" class="muted">No personal fixtures yet.</td></tr>';
+        body.innerHTML = '<tr><td colspan="3" class="muted">No personal fixtures yet. Ask admin to create fixtures for your player name in this league.</td></tr>';
         return;
     }
     mine.forEach((f)=>{
