@@ -102,6 +102,20 @@
         <section id="efMyMatchesCard" class="card" style="display:none">
             <h3>My Matches (Submit Result)</h3>
             <p id="efResultMonitorNotice" class="muted">Results are monitored. Posting incorrect scores may lead to disqualification.</p>
+            <div style="margin-top:8px">
+                <select id="efResultFixtureInput"></select>
+            </div>
+            <div class="grid" style="margin-top:8px">
+                <input id="efCurrentScoreInput" placeholder="Current Score" readonly>
+                <input id="efCurrentStatusInput" placeholder="Match Status" readonly>
+                <input id="efResultOutcomeInput" placeholder="Outcome" readonly>
+            </div>
+            <div class="grid" style="margin-top:8px">
+                <input id="efHomeGoalsInput" type="number" min="0" placeholder="Home Goals">
+                <input id="efAwayGoalsInput" type="number" min="0" placeholder="Away Goals">
+                <button id="efSaveResultBtn" class="btn btn-primary" type="button">Save Full Time</button>
+            </div>
+            <div id="efResultHint" class="muted" style="margin-top:8px"></div>
             <table class="table">
                 <thead>
                     <tr><th>Fixture</th><th>Score</th><th>Action</th></tr>

@@ -410,6 +410,8 @@ function bindUi(){
     document.getElementById("efFixturesLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efResultsLeagueView")?.addEventListener("change", async (e)=> onLeagueChange(e.target.value || ""));
     document.getElementById("efLeagueSelect")?.addEventListener("change", updateEfootballRegistrationPaymentUI);
+    document.getElementById("efResultFixtureInput")?.addEventListener("change", renderMyResultFixtureContext);
+    document.getElementById("efSaveResultBtn")?.addEventListener("click", saveMyResultFromPanel);
     setMenuModeForAuth();
     applyMenuView(currentMenuTarget);
 }
@@ -836,6 +838,7 @@ async function renderMyMatches(){
     if(!body || !currentPlayer || !currentLeague) return;
     const fixtures = await fetchFixturesByLeague(currentLeague);
     const mine = fixtures.filter((f)=> sameName(f.home, currentPlayer.playerName) || sameName(f.away, currentPlayer.playerName));
+    populateMyResultFixtureInputs(mine);
     body.innerHTML = "";
     if(mine.length === 0){
         body.innerHTML = '<tr><td colspan="3" class="muted">No personal fixtures yet. Ask admin to create fixtures for your player name in this league.</td></tr>';
@@ -877,6 +880,80 @@ async function renderMyMatches(){
             await renderStandings();
         });
     });
+}
+
+function populateMyResultFixtureInputs(fixtures){
+    const sel = document.getElementById("efResultFixtureInput");
+    const hint = document.getElementById("efResultHint");
+    if(!sel) return;
+    const rows = Array.isArray(fixtures) ? fixtures : [];
+    const previous = sel.value || "";
+    sel.innerHTML = "";
+    rows.forEach((f)=>{
+        const status = String(f.status || "Scheduled");
+        sel.appendChild(new Option(`${f.home} vs ${f.away} (${f.date || "-"}) [${status}]`, String(f.id || "")));
+    });
+    if(previous && rows.some((f)=> String(f.id) === previous)){
+        sel.value = previous;
+    }
+    if(hint){
+        hint.textContent = rows.length
+            ? "Select fixture, enter full-time score, then save. Standings update automatically."
+            : "No personal fixtures available in this league.";
+    }
+    renderMyResultFixtureContext();
+}
+
+async function renderMyResultFixtureContext(){
+    const fixtureId = String(document.getElementById("efResultFixtureInput")?.value || "");
+    const fixtures = await fetchFixturesByLeague(currentLeague);
+    const mine = fixtures.filter((f)=> sameName(f.home, currentPlayer?.playerName) || sameName(f.away, currentPlayer?.playerName));
+    const fixture = mine.find((f)=> String(f.id) === fixtureId) || null;
+    const scoreInput = document.getElementById("efCurrentScoreInput");
+    const statusInput = document.getElementById("efCurrentStatusInput");
+    const outcomeInput = document.getElementById("efResultOutcomeInput");
+    const homeInput = document.getElementById("efHomeGoalsInput");
+    const awayInput = document.getElementById("efAwayGoalsInput");
+    const hint = document.getElementById("efResultHint");
+    if(!fixture){
+        if(scoreInput) scoreInput.value = "";
+        if(statusInput) statusInput.value = "";
+        if(outcomeInput) outcomeInput.value = "";
+        if(homeInput) homeInput.value = "";
+        if(awayInput) awayInput.value = "";
+        if(hint) hint.textContent = mine.length ? "Select a fixture to post result." : "No personal fixtures available in this league.";
+        return;
+    }
+    const score = extractFixtureScore(fixture.result);
+    const hasScore = Number.isFinite(score.homeGoals) && Number.isFinite(score.awayGoals);
+    if(scoreInput) scoreInput.value = hasScore ? `${fixture.home} ${score.homeGoals} - ${score.awayGoals} ${fixture.away}` : "No score yet";
+    if(statusInput) statusInput.value = String(fixture.status || "Scheduled");
+    if(outcomeInput) outcomeInput.value = hasScore ? getOutcomeFromScore(fixture, score) : "-";
+    if(homeInput) homeInput.value = hasScore ? String(score.homeGoals) : "";
+    if(awayInput) awayInput.value = hasScore ? String(score.awayGoals) : "";
+    if(hint){
+        hint.textContent = `Fixture: ${fixture.home} vs ${fixture.away}. Save full-time to update standings.`;
+    }
+}
+
+async function saveMyResultFromPanel(){
+    const fixtureId = String(document.getElementById("efResultFixtureInput")?.value || "");
+    if(!fixtureId){
+        alert("Select a fixture.");
+        return;
+    }
+    const homeGoals = Number(document.getElementById("efHomeGoalsInput")?.value);
+    const awayGoals = Number(document.getElementById("efAwayGoalsInput")?.value);
+    if(!Number.isFinite(homeGoals) || !Number.isFinite(awayGoals) || homeGoals < 0 || awayGoals < 0){
+        alert("Enter valid score values.");
+        return;
+    }
+    await submitFixtureResult(fixtureId, homeGoals, awayGoals);
+    alert("Result saved and standings updated.");
+    await renderFixtures();
+    await renderResults();
+    await renderMyMatches();
+    await renderStandings();
 }
 
 async function submitFixtureResult(fixtureId, homeGoals, awayGoals){
