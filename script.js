@@ -19,6 +19,14 @@ const COLLECTION_CACHE_TTL_MS = 2500;
 const collectionCache = new Map();
 const collectionInFlight = new Map();
 
+function loadingStart(message){
+    if(window.ummaLoading?.start) window.ummaLoading.start(message);
+}
+
+function loadingEnd(){
+    if(window.ummaLoading?.end) window.ummaLoading.end();
+}
+
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
 }
@@ -56,6 +64,7 @@ async function fetchCollection(name, options = {}){
         if(inFlight) return inFlight;
     }
     const task = (async ()=>{
+        loadingStart(`Fetching ${key}...`);
         try{
             const snap = await getDocs(collection(window.ummaFire.db, key));
             const rows = snap.docs.map((d)=> d.data());
@@ -66,6 +75,7 @@ async function fetchCollection(name, options = {}){
             return [];
         } finally {
             collectionInFlight.delete(key);
+            loadingEnd();
         }
     })();
     collectionInFlight.set(key, task);
@@ -212,23 +222,28 @@ const HARDCODED_LEAGUES = [
 ];
 
 async function init(){
-    clearLegacyLocalTeamData();
-    syncMemoryStoreToPersistent();
-    await Promise.all([hydrateRemoteStore(), ensureAdminAuthSeed()]);
-    bindUI();
-    await Promise.all([ensureSampleData(), ensureMissingAccountsAndTeams()]);
-    await syncStandingsFromPlayedFixtures();
-    await Promise.all([renderLeagueSelect(), populateRegisterLeagueSelect()]);
-    updateRegistrationPaymentUI();
-    await Promise.all([renderStandings(), renderFixtures(), renderRegisteredTeams()]);
-    bindAuthUI();
-    openLoginModalFromHash();
-    await Promise.all([bindAdminUI(), renderHomeHighlights()]);
-    bindSquadUI();
-    updateHeroLeagueHeading();
-    openTabFromHash();
-    initRegistrationMetaFields();
-    startRemoteSubscription();
+    loadingStart('Initializing site...');
+    try{
+        clearLegacyLocalTeamData();
+        syncMemoryStoreToPersistent();
+        await Promise.all([hydrateRemoteStore(), ensureAdminAuthSeed()]);
+        bindUI();
+        await Promise.all([ensureSampleData(), ensureMissingAccountsAndTeams()]);
+        await syncStandingsFromPlayedFixtures();
+        await Promise.all([renderLeagueSelect(), populateRegisterLeagueSelect()]);
+        updateRegistrationPaymentUI();
+        await Promise.all([renderStandings(), renderFixtures(), renderRegisteredTeams()]);
+        bindAuthUI();
+        openLoginModalFromHash();
+        await Promise.all([bindAdminUI(), renderHomeHighlights()]);
+        bindSquadUI();
+        updateHeroLeagueHeading();
+        openTabFromHash();
+        initRegistrationMetaFields();
+        startRemoteSubscription();
+    } finally {
+        loadingEnd();
+    }
 }
 
 function clearLegacyLocalTeamData(){

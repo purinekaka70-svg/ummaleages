@@ -5,6 +5,14 @@ const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
 const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
 
+function loadingStart(message){
+    if(window.ummaLoading?.start) window.ummaLoading.start(message);
+}
+
+function loadingEnd(){
+    if(window.ummaLoading?.end) window.ummaLoading.end();
+}
+
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
 }
@@ -42,17 +50,22 @@ function syncMemoryStoreToPersistent(){
 }
 
 async function initAdmin(){
-    clearLegacyLocalTeamData();
-    syncMemoryStoreToPersistent();
-    await hydrateRemoteStore();
-    await ensureAdminAuthSeed();
-    ensureAdminSeed();
-    ensureSemesterCalendarSeed();
-    bindAdminMenu();
-    bindAdminAuth();
-    bindAdminActions();
-    hydrateAdminView();
-    startRemoteSubscription();
+    loadingStart('Loading admin...');
+    try{
+        clearLegacyLocalTeamData();
+        syncMemoryStoreToPersistent();
+        await hydrateRemoteStore();
+        await ensureAdminAuthSeed();
+        ensureAdminSeed();
+        ensureSemesterCalendarSeed();
+        bindAdminMenu();
+        bindAdminAuth();
+        bindAdminActions();
+        hydrateAdminView();
+        startRemoteSubscription();
+    } finally {
+        loadingEnd();
+    }
 }
 
 function clearLegacyLocalTeamData(){

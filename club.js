@@ -20,6 +20,14 @@ function slug(value){
         .replace(/^-+|-+$/g, '') || 'item';
 }
 
+function loadingStart(message){
+    if(window.ummaLoading?.start) window.ummaLoading.start(message);
+}
+
+function loadingEnd(){
+    if(window.ummaLoading?.end) window.ummaLoading.end();
+}
+
 // -------------------- LOCAL STORAGE CLUB --------------------
 function getCurrentClub(){
     try{
@@ -33,37 +41,42 @@ function clearCurrentClub(){
 
 // -------------------- INIT CLUB PORTAL --------------------
 async function initClubPortal(){
-    clearLegacyLocalTeamData();
+    loadingStart('Loading club portal...');
+    try{
+        clearLegacyLocalTeamData();
 
-    if(window.ummaAuth && typeof window.ummaAuth.onAuthStateChanged === 'function'){
-        await new Promise((res)=>{
-            const unsubscribe = window.ummaAuth.onAuthStateChanged((u)=>{
-                unsubscribe();
-                res();
+        if(window.ummaAuth && typeof window.ummaAuth.onAuthStateChanged === 'function'){
+            await new Promise((res)=>{
+                const unsubscribe = window.ummaAuth.onAuthStateChanged((u)=>{
+                    unsubscribe();
+                    res();
+                });
+                setTimeout(res, 2000);
             });
-            setTimeout(res, 2000);
-        });
+        }
+
+        const user = window.ummaAuth?.getAuthUser?.();
+        if(!user){
+            clearCurrentClub();
+            document.getElementById('clubAuthNotice').style.display = 'block';
+            return;
+        }
+
+        await hydrateRemoteStore();
+
+        const clubName = getCurrentClub();
+        if(!clubName){
+            document.getElementById('clubAuthNotice').style.display = 'block';
+            return;
+        }
+
+        document.getElementById('clubPortalApp').style.display = 'block';
+        bindClubEvents();
+        await renderClubPortal();
+        startRemoteSubscription();
+    } finally {
+        loadingEnd();
     }
-
-    const user = window.ummaAuth?.getAuthUser?.();
-    if(!user){
-        clearCurrentClub();
-        document.getElementById('clubAuthNotice').style.display = 'block';
-        return;
-    }
-
-    await hydrateRemoteStore();
-
-    const clubName = getCurrentClub();
-    if(!clubName){
-        document.getElementById('clubAuthNotice').style.display = 'block';
-        return;
-    }
-
-    document.getElementById('clubPortalApp').style.display = 'block';
-    bindClubEvents();
-    await renderClubPortal();
-    startRemoteSubscription();
 }
 
 // -------------------- MEMORY STORE --------------------
@@ -304,12 +317,15 @@ async function removePlayer(playerName){
 // -------------------- FETCH COLLECTION --------------------
 async function fetchCollection(name){
     if(!window.ummaFire || !window.ummaFire.db) return [];
+    loadingStart(`Fetching ${name}...`);
     try{
         const snap = await getDocs(collection(window.ummaFire.db, name));
         return snap.docs.map(d=>d.data());
     } catch(e){
         console.error('fetchCollection', name, e);
         return [];
+    } finally {
+        loadingEnd();
     }
 }
 

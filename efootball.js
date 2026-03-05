@@ -27,6 +27,14 @@ const EF_CACHE_TTL_MS = 2500;
 const efCache = new Map();
 const efInFlight = new Map();
 
+function loadingStart(message){
+    if(window.ummaLoading?.start) window.ummaLoading.start(message);
+}
+
+function loadingEnd(){
+    if(window.ummaLoading?.end) window.ummaLoading.end();
+}
+
 function slug(value){
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
 }
@@ -69,12 +77,14 @@ async function cachedEfRead(key, loader, options = {}){
         if(pending) return pending;
     }
     const task = (async ()=>{
+        loadingStart('Fetching latest data...');
         try{
             const value = await loader();
             efCache.set(key, { at: Date.now(), value });
             return value;
         } finally {
             efInFlight.delete(key);
+            loadingEnd();
         }
     })();
     efInFlight.set(key, task);
@@ -82,62 +92,67 @@ async function cachedEfRead(key, loader, options = {}){
 }
 
 async function initEfootball(){
-    bindUi();
-    applyLeagueOptions(EF_LEAGUES);
-    await ensureLeagues();
-    await renderLeagueSelects();
-    const initialTarget = getAuthPanelFromHash();
-    if(initialTarget === "login-modal"){
-        openLoginModal();
-    } else {
-        setAuthPanelVisible(initialTarget);
-    }
+    loadingStart('Initializing E-Football...');
+    try{
+        bindUi();
+        applyLeagueOptions(EF_LEAGUES);
+        await ensureLeagues();
+        await renderLeagueSelects();
+        const initialTarget = getAuthPanelFromHash();
+        if(initialTarget === "login-modal"){
+            openLoginModal();
+        } else {
+            setAuthPanelVisible(initialTarget);
+        }
 
-    if(window.ummaAuth?.onAuthStateChanged){
-        window.ummaAuth.onAuthStateChanged(async (user)=>{
-            currentUser = user || null;
-            if(!currentUser){
-                currentPlayer = null;
-                document.getElementById("efLogoutBtn").style.display = "none";
-                document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
-                document.getElementById("efOpenLoginBtn").style.display = "inline-block";
-                document.getElementById("efAccountCard").style.display = "none";
-                document.getElementById("efMyMatchesCard").style.display = "none";
-                setAuthPanelVisible("");
-                await renderFixtures();
-                await renderResults();
-                await renderStandings();
-                applyMenuView(currentMenuTarget);
-                return;
-            }
-            await resolveCurrentPlayer();
-            if(!currentPlayer){
+        if(window.ummaAuth?.onAuthStateChanged){
+            window.ummaAuth.onAuthStateChanged(async (user)=>{
+                currentUser = user || null;
+                if(!currentUser){
+                    currentPlayer = null;
+                    document.getElementById("efLogoutBtn").style.display = "none";
+                    document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
+                    document.getElementById("efOpenLoginBtn").style.display = "inline-block";
+                    document.getElementById("efAccountCard").style.display = "none";
+                    document.getElementById("efMyMatchesCard").style.display = "none";
+                    setAuthPanelVisible("");
+                    await renderFixtures();
+                    await renderResults();
+                    await renderStandings();
+                    applyMenuView(currentMenuTarget);
+                    return;
+                }
+                await resolveCurrentPlayer();
+                if(!currentPlayer){
+                    document.getElementById("efLogoutBtn").style.display = "inline-block";
+                    document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
+                    document.getElementById("efOpenLoginBtn").style.display = "inline-block";
+                    document.getElementById("efAccountCard").style.display = "none";
+                    document.getElementById("efMyMatchesCard").style.display = "none";
+                    setAuthPanelVisible("efRegisterCard");
+                    await renderFixtures();
+                    await renderResults();
+                    await renderStandings();
+                    applyMenuView(currentMenuTarget);
+                    return;
+                }
                 document.getElementById("efLogoutBtn").style.display = "inline-block";
-                document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
-                document.getElementById("efOpenLoginBtn").style.display = "inline-block";
-                document.getElementById("efAccountCard").style.display = "none";
-                document.getElementById("efMyMatchesCard").style.display = "none";
-                setAuthPanelVisible("efRegisterCard");
+                document.getElementById("efOpenRegisterBtn").style.display = "none";
+                document.getElementById("efOpenLoginBtn").style.display = "none";
+                document.getElementById("efAccountCard").style.display = "block";
+                document.getElementById("efMyMatchesCard").style.display = "block";
+                closeLoginModal();
+                setAuthPanelVisible("");
+                await renderAccount();
                 await renderFixtures();
                 await renderResults();
                 await renderStandings();
+                await renderMyMatches();
                 applyMenuView(currentMenuTarget);
-                return;
-            }
-            document.getElementById("efLogoutBtn").style.display = "inline-block";
-            document.getElementById("efOpenRegisterBtn").style.display = "none";
-            document.getElementById("efOpenLoginBtn").style.display = "none";
-            document.getElementById("efAccountCard").style.display = "block";
-            document.getElementById("efMyMatchesCard").style.display = "block";
-            closeLoginModal();
-            setAuthPanelVisible("");
-            await renderAccount();
-            await renderFixtures();
-            await renderResults();
-            await renderStandings();
-            await renderMyMatches();
-            applyMenuView(currentMenuTarget);
-        });
+            });
+        }
+    } finally {
+        loadingEnd();
     }
 }
 
