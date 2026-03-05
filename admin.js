@@ -240,6 +240,7 @@ function bindAdminActions(){
     const leaguesBody = document.getElementById('adminLeaguesBody');
     const fixturesBody = document.getElementById('adminFixturesBody');
     const teamLeagueFilter = document.getElementById('adminTeamLeagueFilter');
+    const openEfootballPanelBtn = document.getElementById('openEfootballPanelBtn');
 
     if(refreshBtn) refreshBtn.addEventListener('click', renderAllAdminData);
     if(openSiteBtn) openSiteBtn.addEventListener('click', ()=> window.open('register.html', '_blank'));
@@ -267,6 +268,7 @@ function bindAdminActions(){
     if(carryQualifiedBtn) carryQualifiedBtn.addEventListener('click', carryQualifiedTeamsToChampions);
     if(finishPremierBtn) finishPremierBtn.addEventListener('click', finishPremierLeague);
     if(teamLeagueFilter) teamLeagueFilter.addEventListener('change', renderTeamTable);
+    if(openEfootballPanelBtn) openEfootballPanelBtn.addEventListener('click', ()=> openAdminSection('efootballSection'));
 
     if(teamsBody){
         teamsBody.addEventListener('click', (e)=>{
@@ -376,7 +378,7 @@ function hydrateAdminView(){
 }
 
 function openAdminSection(sectionId){
-    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection'];
+    const sectionIds = ['dashboardSection', 'leaguesSection', 'fixturesSection', 'resultsSection', 'teamsSection', 'efootballSection'];
     sectionIds.forEach((id)=>{
         const section = document.getElementById(id);
         if(section){
