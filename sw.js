@@ -1,4 +1,4 @@
-const CACHE_NAME = "umma-cache-v2";
+const CACHE_NAME = "umma-cache-v3";
 const CORE_ASSETS = [
   "./",
   "index.html",
@@ -38,9 +38,9 @@ self.addEventListener("fetch", (event)=>{
   if(event.request.method !== "GET") return;
   const requestUrl = new URL(event.request.url);
 
-  // Do not cache live Firebase API responses; keep them network-first.
+  // Never intercept Firebase/Auth SDK or API traffic.
+  // Let the browser do direct network for these endpoints.
   if(requestUrl.hostname.includes("googleapis.com") || requestUrl.hostname.includes("gstatic.com")){
-    event.respondWith(fetch(event.request).catch(()=> caches.match(event.request)));
     return;
   }
 
