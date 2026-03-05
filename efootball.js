@@ -209,8 +209,8 @@ async function initEfootball(){
                 if(!currentPlayer){
                     setMenuModeForAuth();
                     document.getElementById("efLogoutBtn").style.display = "inline-block";
-                    document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
-                    document.getElementById("efOpenLoginBtn").style.display = "inline-block";
+                    document.getElementById("efOpenRegisterBtn").style.display = "none";
+                    document.getElementById("efOpenLoginBtn").style.display = "none";
                     document.getElementById("efAccountCard").style.display = "none";
                     document.getElementById("efMyMatchesCard").style.display = "none";
                     setAuthPanelVisible("efRegisterCard");
@@ -319,19 +319,20 @@ function syncLeagueSelectors(league){
 }
 
 function setMenuModeForAuth(){
-    const isLoggedIn = Boolean(currentPlayer);
+    const isLoggedIn = Boolean(currentUser);
+    const hasPlayerProfile = Boolean(currentPlayer);
     const fixturesBtn = document.getElementById("efMenuFixturesBtn");
     const resultsBtn = document.getElementById("efMenuResultsBtn");
     const standingsBtn = document.getElementById("efMenuStandingsBtn");
     const loginBtn = document.getElementById("efMenuLoginBtn");
     const registerBtn = document.getElementById("efMenuRegisterBtn");
     if(fixturesBtn){
-        fixturesBtn.textContent = isLoggedIn ? "My Fixtures" : "Fixtures";
+        fixturesBtn.textContent = hasPlayerProfile ? "My Fixtures" : "Fixtures";
         fixturesBtn.dataset.target = "efFixturesSection";
     }
     if(resultsBtn){
-        resultsBtn.textContent = isLoggedIn ? "Post Results" : "Results";
-        resultsBtn.dataset.target = isLoggedIn ? "efMyMatchesCard" : "efResultsSection";
+        resultsBtn.textContent = hasPlayerProfile ? "Post Results" : "Results";
+        resultsBtn.dataset.target = hasPlayerProfile ? "efMyMatchesCard" : "efResultsSection";
     }
     if(standingsBtn){
         standingsBtn.textContent = "Standings";
