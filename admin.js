@@ -152,12 +152,12 @@ async function hydrateCollectionsFromFirestore(){
             getDocs(collection(window.ummaFire.db, 'users'))
         ]);
 
-        const leagues = leaguesSnap.docs.map((d)=> normalizeLeagueRow({ id: d.id, ...(d.data() || {}) })).filter((l)=> l.name);
-        const teams = teamsSnap.docs.map((d)=> normalizeTeamRow({ id: d.id, ...(d.data() || {}) })).filter((t)=> t.teamName);
-        const fixtures = fixturesSnap.docs.map((d)=> ({ id: (d.data() || {}).id ?? d.id, ...(d.data() || {}) }));
-        const standings = standingsSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
-        const players = playersSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
-        const accounts = usersSnap.docs.map((d)=>{
+        const leaguesFromFs = leaguesSnap.docs.map((d)=> normalizeLeagueRow({ id: d.id, ...(d.data() || {}) })).filter((l)=> l.name);
+        const teamsFromFs = teamsSnap.docs.map((d)=> normalizeTeamRow({ id: d.id, ...(d.data() || {}) })).filter((t)=> t.teamName);
+        const fixturesFromFs = fixturesSnap.docs.map((d)=> ({ id: (d.data() || {}).id ?? d.id, ...(d.data() || {}) }));
+        const standingsFromFs = standingsSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const playersFromFs = playersSnap.docs.map((d)=> ({ id: d.id, ...(d.data() || {}) }));
+        const accountsFromFs = usersSnap.docs.map((d)=>{
             const row = d.data() || {};
             return {
                 id: d.id,
@@ -167,6 +167,14 @@ async function hydrateCollectionsFromFirestore(){
                 team: String(row.team || row.teamName || '').trim()
             };
         });
+
+        // Do not wipe existing state when a Firestore collection is temporarily empty.
+        const leagues = leaguesFromFs.length ? leaguesFromFs : getJSON('leagues', []);
+        const teams = teamsFromFs.length ? teamsFromFs : getJSON('teams', []);
+        const fixtures = fixturesFromFs.length ? fixturesFromFs : getJSON('fixtures', []);
+        const standings = standingsFromFs.length ? standingsFromFs : getJSON('standings', []);
+        const players = playersFromFs.length ? playersFromFs : getJSON('players', []);
+        const accounts = accountsFromFs.length ? accountsFromFs : getJSON('accounts', []);
 
         suppressRemoteSave = true;
         try{
