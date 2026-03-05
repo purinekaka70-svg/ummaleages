@@ -1,0 +1,23 @@
+{
+  "name": "Umma University Leagues",
+  "short_name": "Umma League",
+  "start_url": "index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f7fb",
+  "theme_color": "#2b0b4a",
+  "description": "Umma University Leagues and E-Football platform.",
+  "icons": [
+    {
+      "src": "https://i.ibb.co/Ps25PFtj/leagues-logo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "https://i.ibb.co/Ps25PFtj/leagues-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

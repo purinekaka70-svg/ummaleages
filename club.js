@@ -2,6 +2,24 @@
 import { doc, getDoc, setDoc, deleteDoc, getDocs, collection, query, where } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', ()=>{ initClubPortal(); });
+const clubMemoryStore = (window.opener && window.opener.__UMMA_DB__)
+    || window.__UMMA_DB__
+    || (window.__UMMA_DB__ = {});
+const DB_KEY_PREFIX = 'umma.db.';
+const NON_PERSISTENT_KEYS = new Set([]);
+let currentSquadFixtureId = '';
+
+function isNonPersistentKey(key){
+    return NON_PERSISTENT_KEYS.has(String(key || ''));
+}
+
+function slug(value){
+    return String(value || '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'item';
+}
+
 // -------------------- LOCAL STORAGE CLUB --------------------
 function getCurrentClub(){
     try{
@@ -293,5 +311,265 @@ async function fetchCollection(name){
         console.error('fetchCollection', name, e);
         return [];
     }
+}
+
+function getSelectedLeague(){
+    const sel = document.getElementById('clubLeagueViewSelect');
+    return String(sel?.value || '').trim();
+}
+
+function openClubSection(sectionId){
+    const id = String(sectionId || '').trim();
+    const panels = document.querySelectorAll('.club-panel');
+    const links = document.querySelectorAll('.menu-link[data-target]');
+    panels.forEach((panel)=>{
+        panel.style.display = panel.id === id ? 'block' : 'none';
+    });
+    links.forEach((link)=>{
+        if(link.dataset.target === id){
+            link.classList.add('active');
+        } else {
+            link.classList.remove('active');
+        }
+    });
+}
+
+async function resolveCurrentTeamDoc(){
+    const user = window.ummaAuth?.getAuthUser?.();
+    if(!user || !window.ummaFire?.db) return null;
+    const byOwner = await getDocs(query(collection(window.ummaFire.db, 'teams'), where('ownerUid', '==', user.uid)));
+    if(!byOwner.empty) return byOwner.docs[0];
+    const direct = await getDoc(doc(window.ummaFire.db, 'teams', user.uid));
+    if(direct.exists()) return direct;
+    return null;
+}
+
+async function renderLeagueViewSelect(team = null){
+    const select = document.getElementById('clubLeagueViewSelect');
+    if(!select) return;
+    const leagueSet = new Set();
+    const teams = await fetchCollection('teams');
+    teams.forEach((row)=>{
+        const league = String(row?.league || '').trim();
+        if(league) leagueSet.add(league);
+    });
+    const ownLeague = String(team?.league || '').trim();
+    if(ownLeague) leagueSet.add(ownLeague);
+    const leagues = [...leagueSet].sort((a,b)=> a.localeCompare(b));
+    const previous = String(select.value || '');
+    select.innerHTML = '';
+    leagues.forEach((league)=>{
+        select.appendChild(new Option(league, league));
+    });
+    if(previous && leagues.includes(previous)){
+        select.value = previous;
+    } else if(ownLeague && leagues.includes(ownLeague)){
+        select.value = ownLeague;
+    } else if(leagues.length){
+        select.value = leagues[0];
+    }
+}
+
+async function renderClubFixtures(){
+    const body = document.getElementById('clubFixturesBody');
+    if(!body) return;
+    const clubName = getCurrentClub();
+    const selectedLeague = getSelectedLeague();
+    let fixtures = await fetchCollection('fixtures');
+    fixtures = fixtures.filter((f)=> f.home === clubName || f.away === clubName);
+    if(selectedLeague) fixtures = fixtures.filter((f)=> String(f.league || '') === selectedLeague);
+    fixtures.sort((a,b)=> String(a.date || '').localeCompare(String(b.date || '')));
+    body.innerHTML = '';
+    if(fixtures.length === 0){
+        body.innerHTML = '<tr><td colspan="4" class="muted">No fixtures found.</td></tr>';
+        return;
+    }
+    fixtures.forEach((f)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHTML(f.league || '-')}</td><td>${escapeHTML(f.home || '-')} vs ${escapeHTML(f.away || '-')}</td><td>${escapeHTML(f.date || '-')}</td><td>${escapeHTML(f.status || 'Scheduled')}</td>`;
+        body.appendChild(tr);
+    });
+}
+
+async function renderClubStandings(){
+    const body = document.getElementById('clubStandingsBody');
+    if(!body) return;
+    const selectedLeague = getSelectedLeague();
+    let standings = await fetchCollection('standings');
+    if(selectedLeague) standings = standings.filter((row)=> String(row.league || '') === selectedLeague);
+    standings.sort((a,b)=> Number(b.pts || 0) - Number(a.pts || 0) || Number(b.gd || 0) - Number(a.gd || 0));
+    body.innerHTML = '';
+    if(standings.length === 0){
+        body.innerHTML = '<tr><td colspan="8" class="muted">No standings available.</td></tr>';
+        return;
+    }
+    standings.forEach((row, idx)=>{
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${idx + 1}</td><td>${escapeHTML(row.team || '-')}</td><td>${Number(row.p || 0)}</td><td>${Number(row.w || 0)}</td><td>${Number(row.d || 0)}</td><td>${Number(row.l || 0)}</td><td>${Number(row.gd || 0)}</td><td>${Number(row.pts || 0)}</td>`;
+        body.appendChild(tr);
+    });
+}
+
+async function renderSquadFixtureSelect(){
+    const clubName = getCurrentClub();
+    const selectedLeague = getSelectedLeague();
+    const host = document.getElementById('squadCurrentFixtureText');
+    let fixtures = await fetchCollection('fixtures');
+    fixtures = fixtures.filter((f)=> f.home === clubName || f.away === clubName);
+    if(selectedLeague) fixtures = fixtures.filter((f)=> String(f.league || '') === selectedLeague);
+    fixtures.sort((a,b)=> String(a.date || '').localeCompare(String(b.date || '')));
+    const nextFixture = fixtures.find((f)=> String(f.status || '').toLowerCase() !== 'played') || fixtures[0] || null;
+    if(!nextFixture){
+        currentSquadFixtureId = '';
+        if(host) host.textContent = 'No fixture selected';
+        return;
+    }
+    currentSquadFixtureId = String(nextFixture.id || '');
+    if(host) host.textContent = `${nextFixture.home} vs ${nextFixture.away} (${nextFixture.date || '-'})`;
+}
+
+async function renderSquadPlayerChecks(){
+    const host = document.getElementById('squadRoleChecks');
+    const startersCountEl = document.getElementById('squadStarterCount');
+    const subsCountEl = document.getElementById('squadSubsCount');
+    if(!host) return;
+    const clubName = getCurrentClub();
+    let players = await fetchCollection('players');
+    players = players.filter((row)=> String(row.team || '') === clubName).sort((a,b)=> String(a.name || '').localeCompare(String(b.name || '')));
+    host.innerHTML = '';
+    if(players.length === 0){
+        host.innerHTML = '<div class="muted">No players added yet.</div>';
+        if(startersCountEl) startersCountEl.textContent = 'Starters selected: 0';
+        if(subsCountEl) subsCountEl.textContent = 'Subs selected: 0';
+        return;
+    }
+    players.forEach((player)=>{
+        const row = document.createElement('div');
+        row.className = 'player-check';
+        row.innerHTML = `
+            <div style="font-weight:700;margin-bottom:6px">${escapeHTML(player.name || '')}</div>
+            <label><input type="checkbox" data-role="starter" data-player="${escapeAttr(player.name || '')}"> Starter</label>
+            <label style="margin-left:10px"><input type="checkbox" data-role="sub" data-player="${escapeAttr(player.name || '')}"> Sub</label>
+        `;
+        host.appendChild(row);
+    });
+    const updateCounts = ()=>{
+        const starters = host.querySelectorAll('input[data-role="starter"]:checked').length;
+        const subs = host.querySelectorAll('input[data-role="sub"]:checked').length;
+        if(startersCountEl) startersCountEl.textContent = `Starters selected: ${starters}`;
+        if(subsCountEl) subsCountEl.textContent = `Subs selected: ${subs}`;
+    };
+    host.querySelectorAll('input[type="checkbox"]').forEach((box)=> box.addEventListener('change', updateCounts));
+    updateCounts();
+}
+
+async function saveClubInfo(){
+    const snap = await resolveCurrentTeamDoc();
+    if(!snap){
+        alert('Club profile not found.');
+        return;
+    }
+    const existing = snap.data() || {};
+    const coachName = collapseSpaces(document.getElementById('clubCoachInput')?.value || existing.coachName || '');
+    const phone = collapseSpaces(document.getElementById('clubPhoneInput')?.value || existing.phone || '');
+    try{
+        await setDoc(doc(window.ummaFire.db, 'teams', String(existing.id || snap.id)), {
+            coachName,
+            phone,
+            updatedAtMs: Date.now()
+        }, { merge: true });
+        await renderClubPortal();
+        alert('Club profile updated.');
+    } catch {
+        alert('Failed to save club info.');
+    }
+}
+
+function readSelectedSquad(){
+    const host = document.getElementById('squadRoleChecks');
+    if(!host) return { starters: [], subs: [] };
+    const starters = [...host.querySelectorAll('input[data-role="starter"]:checked')].map((el)=> String(el.dataset.player || '').trim()).filter(Boolean);
+    const subs = [...host.querySelectorAll('input[data-role="sub"]:checked')].map((el)=> String(el.dataset.player || '').trim()).filter(Boolean);
+    return { starters, subs };
+}
+
+async function saveSquadOfWeek(){
+    const snap = await resolveCurrentTeamDoc();
+    if(!snap){
+        alert('Club profile not found.');
+        return;
+    }
+    const squad = readSelectedSquad();
+    if(squad.starters.length === 0 && squad.subs.length === 0){
+        alert('Select at least one player.');
+        return;
+    }
+    const existing = snap.data() || {};
+    const history = Array.isArray(existing.sotwHistory) ? existing.sotwHistory : [];
+    const entry = {
+        week: getCurrentWeekLabel(),
+        fixture: document.getElementById('squadCurrentFixtureText')?.textContent || '-',
+        starters: squad.starters,
+        subs: squad.subs,
+        updatedAtMs: Date.now()
+    };
+    try{
+        await setDoc(doc(window.ummaFire.db, 'teams', String(existing.id || snap.id)), {
+            sotw: entry,
+            sotwHistory: [...history, entry].slice(-20),
+            updatedAtMs: Date.now()
+        }, { merge: true });
+        await renderSotwHistory();
+        alert('Squad of the week saved.');
+    } catch {
+        alert('Failed to save squad of the week.');
+    }
+}
+
+async function postMatchSquad(){
+    if(!currentSquadFixtureId){
+        alert('No fixture selected.');
+        return;
+    }
+    const clubName = getCurrentClub();
+    const squad = readSelectedSquad();
+    if(squad.starters.length === 0 && squad.subs.length === 0){
+        alert('Select players before posting squad.');
+        return;
+    }
+    try{
+        const fixtureRef = doc(window.ummaFire.db, 'fixtures', currentSquadFixtureId);
+        const fixtureSnap = await getDoc(fixtureRef);
+        const fixtureData = fixtureSnap.exists() ? fixtureSnap.data() : {};
+        const squads = fixtureData?.squads && typeof fixtureData.squads === 'object' ? fixtureData.squads : {};
+        squads[clubName] = {
+            starters: squad.starters,
+            subs: squad.subs,
+            postedAtMs: Date.now()
+        };
+        await setDoc(fixtureRef, { squads, updatedAtMs: Date.now() }, { merge: true });
+        alert('Match squad posted.');
+    } catch {
+        alert('Failed to post match squad.');
+    }
+}
+
+async function renderSotwHistory(){
+    const body = document.getElementById('sotwHistoryBody');
+    if(!body) return;
+    const snap = await resolveCurrentTeamDoc();
+    const team = snap?.data?.() || {};
+    const history = Array.isArray(team.sotwHistory) ? team.sotwHistory : [];
+    body.innerHTML = '';
+    if(history.length === 0){
+        body.innerHTML = '<tr><td colspan="3" class="muted">No saved squad history yet.</td></tr>';
+        return;
+    }
+    history.slice().reverse().forEach((entry)=>{
+        const players = [...(entry.starters || []).map((name)=> `${name} (S)`), ...(entry.subs || []).map((name)=> `${name} (Sub)`)].join(', ');
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${escapeHTML(entry.week || '-')}</td><td>${escapeHTML(entry.fixture || '-')}</td><td>${escapeHTML(players || '-')}</td>`;
+        body.appendChild(tr);
+    });
 }
 

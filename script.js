@@ -15,6 +15,9 @@ const appMemoryStore = (window.opener && window.opener.__UMMA_DB__)
     || (window.__UMMA_DB__ = {});
 const DB_KEY_PREFIX = 'umma.db.';
 const NON_PERSISTENT_KEYS = new Set([]);
+const COLLECTION_CACHE_TTL_MS = 2500;
+const collectionCache = new Map();
+const collectionInFlight = new Map();
 
 function isNonPersistentKey(key){
     return NON_PERSISTENT_KEYS.has(String(key || ''));
@@ -28,14 +31,47 @@ function slug(value){
         .replace(/^-+|-+$/g, "") || "item";
 }
 
-// Firestore collection fetch helper
-async function fetchCollection(name){
+function clearCollectionCache(name = ''){
+    const target = String(name || '').trim();
+    if(!target){
+        collectionCache.clear();
+        return;
+    }
+    collectionCache.delete(target);
+}
+
+// Firestore collection fetch helper with short-lived cache and in-flight dedupe.
+async function fetchCollection(name, options = {}){
+    const key = String(name || '').trim();
+    if(!key) return [];
     if(!window.ummaFire || !window.ummaFire.db) return [];
+    const force = Boolean(options.force);
+    const now = Date.now();
+    if(!force){
+        const cached = collectionCache.get(key);
+        if(cached && (now - cached.at) < COLLECTION_CACHE_TTL_MS){
+            return cached.rows;
+        }
+        const inFlight = collectionInFlight.get(key);
+        if(inFlight) return inFlight;
+    }
+    const task = (async ()=>{
+        try{
+            const snap = await getDocs(collection(window.ummaFire.db, key));
+            const rows = snap.docs.map((d)=> d.data());
+            collectionCache.set(key, { at: Date.now(), rows });
+            return rows;
+        } catch(err){
+            console.error('fetchCollection', key, err);
+            return [];
+        } finally {
+            collectionInFlight.delete(key);
+        }
+    })();
+    collectionInFlight.set(key, task);
     try{
-        const snap = await getDocs(collection(window.ummaFire.db, name));
-        return snap.docs.map(d=>d.data());
-    } catch(err){
-        console.error('fetchCollection', name, err);
+        return await task;
+    } catch {
         return [];
     }
 }
@@ -178,24 +214,18 @@ const HARDCODED_LEAGUES = [
 async function init(){
     clearLegacyLocalTeamData();
     syncMemoryStoreToPersistent();
-    await hydrateRemoteStore();
-    await ensureAdminAuthSeed();
+    await Promise.all([hydrateRemoteStore(), ensureAdminAuthSeed()]);
     bindUI();
-    await ensureSampleData();
-    await ensureMissingAccountsAndTeams();
+    await Promise.all([ensureSampleData(), ensureMissingAccountsAndTeams()]);
     await syncStandingsFromPlayedFixtures();
-    await renderLeagueSelect();
-    await populateRegisterLeagueSelect();
+    await Promise.all([renderLeagueSelect(), populateRegisterLeagueSelect()]);
     updateRegistrationPaymentUI();
-    await renderStandings();
-    await renderFixtures();
-    await renderRegisteredTeams();
+    await Promise.all([renderStandings(), renderFixtures(), renderRegisteredTeams()]);
     bindAuthUI();
     openLoginModalFromHash();
-    await bindAdminUI();
+    await Promise.all([bindAdminUI(), renderHomeHighlights()]);
     bindSquadUI();
     updateHeroLeagueHeading();
-    await renderHomeHighlights();
     openTabFromHash();
     initRegistrationMetaFields();
     startRemoteSubscription();
@@ -765,6 +795,7 @@ function updateRegistrationPaymentUI(){
 }
 
 function applyRemoteState(remote){
+    clearCollectionCache();
     Object.keys(remote || {}).forEach((key)=>{
         const value = String(remote[key]);
         appMemoryStore[key] = value;

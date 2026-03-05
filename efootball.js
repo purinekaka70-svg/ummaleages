@@ -23,6 +23,9 @@ const EF_COLLECTIONS = {
     results: "efootball_results",
     standings: "efootball_standings"
 };
+const EF_CACHE_TTL_MS = 2500;
+const efCache = new Map();
+const efInFlight = new Map();
 
 function slug(value){
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
@@ -35,6 +38,47 @@ function scoreText(result){
 
 function getLeagueByName(name){
     return EF_LEAGUES.find((l)=> l.name === name) || null;
+}
+
+function efCacheKey(prefix, value = ""){
+    return `${String(prefix || "").trim()}::${String(value || "").trim().toLowerCase()}`;
+}
+
+function clearEfCache(prefix = ""){
+    const target = String(prefix || "").trim().toLowerCase();
+    if(!target){
+        efCache.clear();
+        return;
+    }
+    [...efCache.keys()].forEach((key)=>{
+        if(key.toLowerCase().startsWith(`${target}::`)){
+            efCache.delete(key);
+        }
+    });
+}
+
+async function cachedEfRead(key, loader, options = {}){
+    const force = Boolean(options.force);
+    const now = Date.now();
+    if(!force){
+        const cached = efCache.get(key);
+        if(cached && (now - cached.at) < EF_CACHE_TTL_MS){
+            return cached.value;
+        }
+        const pending = efInFlight.get(key);
+        if(pending) return pending;
+    }
+    const task = (async ()=>{
+        try{
+            const value = await loader();
+            efCache.set(key, { at: Date.now(), value });
+            return value;
+        } finally {
+            efInFlight.delete(key);
+        }
+    })();
+    efInFlight.set(key, task);
+    return task;
 }
 
 async function initEfootball(){
@@ -336,7 +380,10 @@ async function fetchLeagues(){
     }
 
     try{
-        const snap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.leagues));
+        const snap = await cachedEfRead(
+            efCacheKey("leagues", "all"),
+            ()=> getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.leagues))
+        );
         const rows = snap.docs.map((d)=> d.data()).filter((league)=> league?.name);
         const allowed = new Set(EF_LEAGUES.map((league)=> String(league.name).toLowerCase()));
         rows.forEach((league)=>{
@@ -430,6 +477,7 @@ async function registerPlayer(){
         updatedAtMs: Date.now()
     }, { merge: true });
 
+    clearEfCache();
     await ensurePlayerStandingsRow(playerName, league);
     await createFixturesForNewPlayer(playerName, league);
     alert("Registered successfully. You are now logged in.");
@@ -536,7 +584,10 @@ async function fetchFixturesByLeague(league){
     const selectedKey = normalizeLeagueKey(league);
     try{
         if(selectedKey){
-            const snap = await getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures), where("league", "==", league)));
+            const snap = await cachedEfRead(
+                efCacheKey("fixtures", selectedKey),
+                ()=> getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures), where("league", "==", league)))
+            );
             const exactRows = snap.docs.map((d)=> d.data());
             if(exactRows.length > 0){
                 return exactRows.sort((a,b)=> String(a.date || "").localeCompare(String(b.date || "")));
@@ -544,7 +595,10 @@ async function fetchFixturesByLeague(league){
         }
 
         // Fallback: fetch all fixtures, then filter client-side (handles older mixed league text/casing).
-        const allSnap = await getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures));
+        const allSnap = await cachedEfRead(
+            efCacheKey("fixtures", "all"),
+            ()=> getDocs(collection(window.ummaFire.db, EF_COLLECTIONS.fixtures))
+        );
         const rows = allSnap.docs.map((d)=> d.data());
         const filtered = selectedKey
             ? rows.filter((row)=> normalizeLeagueKey(row?.league) === selectedKey)
@@ -659,6 +713,7 @@ async function submitFixtureResult(fixtureId, homeGoals, awayGoals){
         submittedAt: new Date().toISOString(),
         updatedAtMs: Date.now()
     }, { merge: true });
+    clearEfCache();
     await recomputeStandings(fixture.league);
 }
 
@@ -712,7 +767,10 @@ async function recomputeStandings(league){
 async function renderStandings(){
     const body = document.getElementById("efStandingsBody");
     if(!body || !currentLeague) return;
-    const snap = await getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.standings), where("league", "==", currentLeague)));
+    const snap = await cachedEfRead(
+        efCacheKey("standings", currentLeague),
+        ()=> getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.standings), where("league", "==", currentLeague)))
+    );
     const rows = snap.docs.map((d)=> d.data()).sort((a,b)=> Number(b.pts || 0) - Number(a.pts || 0) || Number(b.gd || 0) - Number(a.gd || 0));
     body.innerHTML = "";
     if(rows.length === 0){
