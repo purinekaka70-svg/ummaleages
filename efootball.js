@@ -728,7 +728,23 @@ async function loginPlayer(){
     try{
         await window.ummaAuth.loginAuthUser(email, password);
     } catch (err){
-        const code = String(err?.code || "");
+        const code = String(err?.code || "").toLowerCase();
+        if(code.includes("network-request-failed")){
+            alert("Network error. Check internet and try again.");
+            return;
+        }
+        if(code.includes("too-many-requests")){
+            alert("Too many attempts. Wait a moment, then try again.");
+            return;
+        }
+        if(code.includes("invalid-email")){
+            alert("Enter a valid email address.");
+            return;
+        }
+        if(code.includes("user-disabled")){
+            alert("This account is disabled. Contact admin.");
+            return;
+        }
         if(code.includes("user-not-found") || code.includes("invalid-credential")){
             const linked = await tryProvisionAuthFromKnownAccount(email, password);
             if(linked){
@@ -744,6 +760,15 @@ async function loginPlayer(){
             alert("Incorrect password for that email.");
             return;
         }
+        // Last fallback: if auth metadata is out-of-sync, try provisioning from known user docs.
+        const linked = await tryProvisionAuthFromKnownAccount(email, password);
+        if(linked){
+            try{
+                await window.ummaAuth.loginAuthUser(email, password);
+                return;
+            } catch {}
+        }
+        console.error("E-Football login failed:", err);
         alert("Login failed. Please try again.");
     }
 }
