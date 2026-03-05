@@ -711,7 +711,7 @@ async function loginPlayer(){
         await window.ummaAuth.loginAuthUser(email, password);
     } catch (err){
         const code = String(err?.code || "");
-        if(code.includes("user-not-found")){
+        if(code.includes("user-not-found") || code.includes("invalid-credential")){
             const linked = await tryProvisionAuthFromKnownAccount(email, password);
             if(linked){
                 try{
@@ -719,10 +719,10 @@ async function loginPlayer(){
                     return;
                 } catch {}
             }
-            alert("No account found with that email. Register first.");
+            alert("No account found with that email. Register first, or use the exact password used at registration.");
             return;
         }
-        if(code.includes("wrong-password") || code.includes("invalid-credential")){
+        if(code.includes("wrong-password")){
             alert("Incorrect password for that email.");
             return;
         }
