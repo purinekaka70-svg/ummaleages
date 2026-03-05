@@ -829,12 +829,19 @@ async function renderMyMatches(){
         return;
     }
     mine.forEach((f)=>{
+        const score = extractFixtureScore(f.result);
+        const hasScore = Number.isFinite(score.homeGoals) && Number.isFinite(score.awayGoals);
+        const status = String(f.status || "Scheduled");
+        const outcome = hasScore ? getOutcomeFromScore(f, score) : "-";
+        const homeValue = hasScore ? String(score.homeGoals) : "";
+        const awayValue = hasScore ? String(score.awayGoals) : "";
+        const actionLabel = hasScore ? "Update" : "Submit";
         const tr = document.createElement("tr");
         tr.innerHTML = `
-            <td>${f.home} vs ${f.away}</td>
-            <td><input data-role="home-goals" data-id="${f.id}" type="number" min="0" placeholder="Home"> -
-                <input data-role="away-goals" data-id="${f.id}" type="number" min="0" placeholder="Away"></td>
-            <td><button class="btn btn-primary" data-action="submit-result" data-id="${f.id}">Submit</button></td>
+            <td>${f.home} vs ${f.away}<div class="muted">Status: ${status} | Current: ${hasScore ? `${score.homeGoals}-${score.awayGoals} (${outcome})` : "No score yet"}</div></td>
+            <td><input data-role="home-goals" data-id="${f.id}" type="number" min="0" placeholder="Home" value="${homeValue}"> -
+                <input data-role="away-goals" data-id="${f.id}" type="number" min="0" placeholder="Away" value="${awayValue}"></td>
+            <td><button class="btn btn-primary" data-action="submit-result" data-id="${f.id}">${actionLabel}</button></td>
         `;
         body.appendChild(tr);
     });
@@ -850,6 +857,7 @@ async function renderMyMatches(){
                 return;
             }
             await submitFixtureResult(id, homeGoals, awayGoals);
+            alert("Result saved and standings updated.");
             await renderFixtures();
             await renderResults();
             await renderMyMatches();
