@@ -128,11 +128,37 @@ async function tryProvisionAuthFromKnownAccount(email, password){
             return true;
         } catch (registerErr){
             const code = String(registerErr?.code || "");
-            return code.includes("email-already-in-use");
+            if(!code.includes("email-already-in-use")) return false;
+            try{
+                await window.ummaAuth.loginAuthUser(email, password);
+                return true;
+            } catch {
+                return false;
+            }
         }
     } catch {
         return false;
     }
+}
+
+async function tryLoginWithPasswordVariants(email, rawPassword){
+    const variants = [];
+    const first = String(rawPassword || "");
+    variants.push(first);
+    const trimmed = first.trim();
+    if(trimmed && trimmed !== first){
+        variants.push(trimmed);
+    }
+    let lastErr = null;
+    for(const pwd of variants){
+        try{
+            await window.ummaAuth.loginAuthUser(email, pwd);
+            return { ok: true, passwordUsed: pwd };
+        } catch (err){
+            lastErr = err;
+        }
+    }
+    return { ok: false, error: lastErr };
 }
 
 async function resolveCurrentPlayerWithRetry(retries = 2, waitMs = 200){
@@ -608,12 +634,16 @@ async function registerPlayer(){
     const phone = String(document.getElementById("efPhone")?.value || "").trim();
     const mpesaRef = String(document.getElementById("efMpesaRef")?.value || "").trim();
     const email = normalizeEmail(document.getElementById("efEmail")?.value || "");
-    const password = String(document.getElementById("efPassword")?.value || "");
+    const password = String(document.getElementById("efPassword")?.value || "").trim();
     const league = String(document.getElementById("efLeagueSelect")?.value || "").trim();
     const fee = Number(getLeagueByName(league)?.fee || 0);
     pendingRegistrationPlayerId = "";
     if(!playerName || !phone || !email || !password || !league){
         alert("Fill all registration fields.");
+        return;
+    }
+    if(password.length < 4){
+        alert("Password must be at least 4 characters.");
         return;
     }
     if(fee > 0 && !mpesaRef){
@@ -725,9 +755,10 @@ async function loginPlayer(){
         alert("Auth is not ready yet. Please retry.");
         return;
     }
-    try{
-        await window.ummaAuth.loginAuthUser(email, password);
-    } catch (err){
+    const direct = await tryLoginWithPasswordVariants(email, password);
+    if(direct.ok) return;
+    {
+        const err = direct.error;
         const code = String(err?.code || "").toLowerCase();
         if(code.includes("network-request-failed")){
             alert("Network error. Check internet and try again.");
@@ -748,10 +779,7 @@ async function loginPlayer(){
         if(code.includes("user-not-found") || code.includes("invalid-credential")){
             const linked = await tryProvisionAuthFromKnownAccount(email, password);
             if(linked){
-                try{
-                    await window.ummaAuth.loginAuthUser(email, password);
-                    return;
-                } catch {}
+                return;
             }
             alert("No account found with that email. Register first, or use the exact password used at registration.");
             return;
@@ -763,10 +791,7 @@ async function loginPlayer(){
         // Last fallback: if auth metadata is out-of-sync, try provisioning from known user docs.
         const linked = await tryProvisionAuthFromKnownAccount(email, password);
         if(linked){
-            try{
-                await window.ummaAuth.loginAuthUser(email, password);
-                return;
-            } catch {}
+            return;
         }
         console.error("E-Football login failed:", err);
         alert("Login failed. Please try again.");
