@@ -716,7 +716,7 @@ function renderTeamsByLeagueDirectory(){
 }
 
 function renderStats(){
-    const leagues = getJSON('leagues', []);
+    const leagues = getLeagueNames();
     const teams = getJSON('teams', []);
     const fixtures = getJSON('fixtures', []);
     const players = getJSON('players', []);
@@ -733,8 +733,13 @@ function renderLeagueTable(){
     if(!body) return;
     const leagues = getJSON('leagues', [])
         .map((l)=> normalizeLeagueRow(l))
-        .filter((l)=> l.name)
-        .sort((a,b)=> String(a.name).localeCompare(String(b.name)));
+        .filter((l)=> l.name);
+    if(leagues.length === 0){
+        getLeagueNames().forEach((name)=>{
+            leagues.push({ id: slugify(name), name, desc: '-' });
+        });
+    }
+    leagues.sort((a,b)=> String(a.name).localeCompare(String(b.name)));
     body.innerHTML = '';
     leagues.forEach((l)=>{
         const tr = document.createElement('tr');
