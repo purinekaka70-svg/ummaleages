@@ -107,7 +107,15 @@
   function registerServiceWorker(){
     if(!("serviceWorker" in navigator)) return;
     window.addEventListener("load", ()=>{
-      navigator.serviceWorker.register("sw.js").catch(()=>{});
+      navigator.serviceWorker.register("sw.js")
+        .then((reg)=> reg.update().catch(()=>{}))
+        .catch(()=>{});
+      let reloaded = false;
+      navigator.serviceWorker.addEventListener("controllerchange", ()=>{
+        if(reloaded) return;
+        reloaded = true;
+        window.location.reload();
+      });
     });
   }
 

@@ -1,4 +1,4 @@
-const CACHE_NAME = "umma-cache-v3";
+const CACHE_NAME = "umma-cache-v4";
 const CORE_ASSETS = [
   "./",
   "index.html",
