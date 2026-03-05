@@ -93,11 +93,12 @@ async function initClubPortal(){
 
         if(window.ummaAuth && typeof window.ummaAuth.onAuthStateChanged === 'function'){
             await new Promise((res)=>{
+                const timeoutId = setTimeout(res, 300);
                 const unsubscribe = window.ummaAuth.onAuthStateChanged((u)=>{
+                    clearTimeout(timeoutId);
                     unsubscribe();
                     res();
                 });
-                setTimeout(res, 2000);
             });
         }
 

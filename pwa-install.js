@@ -3,8 +3,11 @@
   const LOADER_ID = "ummaGlobalLoader";
   const LOADER_TEXT_ID = "ummaLoaderText";
   const OFFLINE_ID = "ummaOfflineNotice";
+  const INSTALL_BUTTON_ENABLED = false;
+  const LOADER_MAX_VISIBLE_MS = 3500;
   let deferredPrompt = null;
   let pendingCount = 0;
+  let loaderAutoResetTimer = null;
 
   function createInstallButton(){
     if(document.getElementById(INSTALL_BTN_ID)) return null;
@@ -83,6 +86,7 @@
   }
 
   function showInstallButton(){
+    if(!INSTALL_BUTTON_ENABLED) return;
     const btn = document.getElementById(INSTALL_BTN_ID) || createInstallButton();
     if(!btn) return;
     btn.style.display = "inline-block";
@@ -108,10 +112,13 @@
   }
 
   function initInstallFlow(){
-    createInstallButton();
+    if(INSTALL_BUTTON_ENABLED){
+      createInstallButton();
+    }
     createLoader();
     createOfflineNotice();
     window.addEventListener("beforeinstallprompt", (event)=>{
+      if(!INSTALL_BUTTON_ENABLED) return;
       event.preventDefault();
       deferredPrompt = event;
       showInstallButton();
@@ -123,19 +130,38 @@
     });
   }
 
+  function clearLoaderAutoReset(){
+    if(loaderAutoResetTimer){
+      clearTimeout(loaderAutoResetTimer);
+      loaderAutoResetTimer = null;
+    }
+  }
+
+  function scheduleLoaderAutoReset(){
+    clearLoaderAutoReset();
+    loaderAutoResetTimer = setTimeout(()=>{
+      pendingCount = 0;
+      setLoaderVisible(false);
+      loaderAutoResetTimer = null;
+    }, LOADER_MAX_VISIBLE_MS);
+  }
+
   window.ummaLoading = {
     start(message = "Loading..."){
       pendingCount += 1;
       setLoaderVisible(true, message);
+      scheduleLoaderAutoReset();
     },
     end(){
       pendingCount = Math.max(0, pendingCount - 1);
       if(pendingCount === 0){
+        clearLoaderAutoReset();
         setLoaderVisible(false);
       }
     },
     reset(){
       pendingCount = 0;
+      clearLoaderAutoReset();
       setLoaderVisible(false);
     }
   };
