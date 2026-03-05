@@ -1,4 +1,4 @@
-import { getDocs, collection } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
+import { getDocs, getDoc, collection, doc } from "https://www.gstatic.com/firebasejs/12.10.0/firebase-firestore.js";
 
 document.addEventListener('DOMContentLoaded', ()=>{ initAdmin(); });
 const adminMemoryStore = (window.opener && window.opener.__UMMA_DB__)
