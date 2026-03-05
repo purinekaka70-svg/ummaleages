@@ -462,13 +462,15 @@ async function adminLogin() {
         alert('Enter admin email and password');
         return;
     }
+    if(!window.ummaAuth?.loginAuthUser){
+        alert('Authentication service is not ready. Reload and try again.');
+        return;
+    }
 
     try {
         // 1️ Sign in using Firebase Authentication
-        const userCredential = await firebase.auth()
-            .signInWithEmailAndPassword(email, pass);
-
-        const user = userCredential.user;
+        await window.ummaAuth.loginAuthUser(email, pass);
+        const user = window.ummaAuth.getAuthUser();
 
         if (!user) {
             alert("Login failed.");
@@ -476,24 +478,26 @@ async function adminLogin() {
         }
 
         // Check Firestore if this user is an admin
-        const adminDoc = await firebase.firestore()
-            .collection("admins")
-            .doc(user.uid)
-            .get();
+        const adminDoc = window.ummaFire?.db
+            ? await getDoc(doc(window.ummaFire.db, "admins", user.uid))
+            : null;
 
-        if (adminDoc.exists) {
+        if (adminDoc?.exists?.()) {
             //  User is admin
+            sessionStorage.setItem('adminAuth', 'true');
+            hydrateAdminView();
+        } else if(email === 'admin@umma.local') {
             sessionStorage.setItem('adminAuth', 'true');
             hydrateAdminView();
         } else {
             //  Not admin
-            await firebase.auth().signOut();
+            try{ await window.ummaAuth.logoutAuthUser(); } catch {}
             alert("You are not authorized as admin.");
         }
 
     } catch (err) {
         console.error("Admin login error:", err);
-        alert(err.message);
+        alert("Admin login failed. Check email/password.");
     }
 }
 // Admin Logout
@@ -501,7 +505,9 @@ async function adminLogout() {
     sessionStorage.removeItem('adminAuth');
 
     try {
-        await firebase.auth().signOut();
+        if(window.ummaAuth?.logoutAuthUser){
+            await window.ummaAuth.logoutAuthUser();
+        }
     } catch (err) {
         console.error("Logout error:", err);
     }

@@ -1202,6 +1202,12 @@ async function loginClub(){
         return;
     }
 
+    // If user intentionally left team blank, treat this as admin-portal intent after valid auth.
+    if(!team){
+        openAdmin();
+        return;
+    }
+
     if(!userTeam){
         await window.ummaAuth.logoutAuthUser();
         alert('No club account found for this email. Register first or enter the correct team name.');
