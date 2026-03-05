@@ -618,24 +618,43 @@ async function ensureMissingAccountsAndTeams(){
     try{
         const teams = await fetchCollection('teams');
         const accounts = await fetchCollection('users');
-        let changed = false;
-        const hasAdmin = accounts.some((a)=> String(a.role || '') === 'admin');
+        const hasAdmin = accounts.some((a)=> String(a.role || '').toLowerCase() === 'admin');
         const adminEmail = getDefaultAdminEmail();
         if(!hasAdmin){
             await setDoc(doc(window.ummaFire.db, 'users', slug(adminEmail)), 
                 {team:'admin', email:adminEmail, role:'admin', updatedAtMs: Date.now()}, {merge:true});
-            changed = true;
         }
+
+        const accountEmailSet = new Set(
+            (Array.isArray(accounts) ? accounts : [])
+                .map((a)=> String(a?.email || '').trim().toLowerCase())
+                .filter(Boolean)
+        );
+
         // Ensure every team has an account by email
-        teams.forEach((t)=>{
-            const teamEmail = getDefaultTeamEmail(t.teamName || '');
-            const hasAccount = accounts.some(a=> a.email?.toLowerCase() === teamEmail.toLowerCase());
-            if(!hasAccount && t.teamName){
-                setDoc(doc(window.ummaFire.db, 'users', slug(t.teamName)), 
-                    {team: t.teamName, email: teamEmail, role: 'club', updatedAtMs: Date.now()}, {merge:true})
-                    .catch(err=> console.error('team account write error', err));
-            }
+        const writes = [];
+        (Array.isArray(teams) ? teams : []).forEach((t)=>{
+            const teamName = String(t?.teamName || '').trim();
+            if(!teamName) return;
+            const teamEmail = String(getDefaultTeamEmail(teamName) || '').trim().toLowerCase();
+            if(!teamEmail) return;
+            if(accountEmailSet.has(teamEmail)) return;
+
+            // Use email slug as a stable user doc id to avoid team-name collisions.
+            const userId = slug(teamEmail);
+            writes.push(
+                setDoc(
+                    doc(window.ummaFire.db, 'users', userId),
+                    {team: teamName, email: teamEmail, role: 'club', updatedAtMs: Date.now()},
+                    {merge:true}
+                ).catch((err)=> console.error('team account write error', { teamName, teamEmail, err }))
+            );
+            accountEmailSet.add(teamEmail);
         });
+
+        if(writes.length){
+            await Promise.allSettled(writes);
+        }
     } catch(err){
         console.error('ensureMissingAccountsAndTeams error', err);
     }
