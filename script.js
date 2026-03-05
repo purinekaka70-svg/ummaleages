@@ -20,11 +20,57 @@ const collectionCache = new Map();
 const collectionInFlight = new Map();
 
 function loadingStart(message){
-    if(window.ummaLoading?.start) window.ummaLoading.start(message);
+    ensureLoadingApi().start(message);
 }
 
 function loadingEnd(){
-    if(window.ummaLoading?.end) window.ummaLoading.end();
+    ensureLoadingApi().end();
+}
+
+function ensureLoadingApi(){
+    if(window.ummaLoading) return window.ummaLoading;
+    if(window.__ummaFallbackLoading) return window.__ummaFallbackLoading;
+    const LOADER_ID = 'ummaFallbackLoader';
+    const TEXT_ID = 'ummaFallbackLoaderText';
+    let pending = 0;
+    const ensureDom = ()=>{
+        if(document.getElementById(LOADER_ID)) return;
+        const wrap = document.createElement('div');
+        wrap.id = LOADER_ID;
+        wrap.style.position = 'fixed';
+        wrap.style.inset = '0';
+        wrap.style.zIndex = '9998';
+        wrap.style.display = 'none';
+        wrap.style.alignItems = 'center';
+        wrap.style.justifyContent = 'center';
+        wrap.style.background = 'rgba(10,10,18,0.24)';
+        wrap.innerHTML = `<div style="display:flex;align-items:center;gap:10px;background:#fff;border-radius:12px;padding:12px 16px;box-shadow:0 12px 28px rgba(0,0,0,0.18);"><span style="width:18px;height:18px;border:3px solid #d9c98a;border-top-color:#2b0b4a;border-radius:50%;display:inline-block;animation:ummaSpinFallback .8s linear infinite;"></span><span id="${TEXT_ID}" style="font-weight:600;color:#2b0b4a;">Loading...</span></div>`;
+        if(!document.getElementById('ummaFallbackLoaderStyle')){
+            const style = document.createElement('style');
+            style.id = 'ummaFallbackLoaderStyle';
+            style.textContent = '@keyframes ummaSpinFallback{to{transform:rotate(360deg)}}';
+            document.head.appendChild(style);
+        }
+        document.body.appendChild(wrap);
+    };
+    const api = {
+        start(message = 'Loading...'){
+            pending += 1;
+            ensureDom();
+            const wrap = document.getElementById(LOADER_ID);
+            const text = document.getElementById(TEXT_ID);
+            if(text) text.textContent = message;
+            if(wrap) wrap.style.display = 'flex';
+        },
+        end(){
+            pending = Math.max(0, pending - 1);
+            if(pending !== 0) return;
+            const wrap = document.getElementById(LOADER_ID);
+            if(wrap) wrap.style.display = 'none';
+        }
+    };
+    window.__ummaFallbackLoading = api;
+    return api;
 }
 
 function isNonPersistentKey(key){
