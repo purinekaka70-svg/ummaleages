@@ -98,6 +98,43 @@ function sameName(a, b){
     return normalizeName(a) === normalizeName(b);
 }
 
+async function waitForAuthApi(timeoutMs = 2500){
+    if(window.ummaAuth?.loginAuthUser) return true;
+    await new Promise((resolve)=>{
+        let done = false;
+        const finish = ()=>{
+            if(done) return;
+            done = true;
+            window.removeEventListener("umma:bridge-ready", finish);
+            resolve();
+        };
+        window.addEventListener("umma:bridge-ready", finish, { once: true });
+        setTimeout(finish, timeoutMs);
+    });
+    return Boolean(window.ummaAuth?.loginAuthUser);
+}
+
+async function tryProvisionAuthFromKnownAccount(email, password){
+    if(!window.ummaFire?.db || !window.ummaAuth?.registerAuthUser) return false;
+    try{
+        const [mainUsers, efUsers] = await Promise.all([
+            getDocs(query(collection(window.ummaFire.db, "users"), where("email", "==", email))),
+            getDocs(query(collection(window.ummaFire.db, EF_COLLECTIONS.users), where("email", "==", email)))
+        ]);
+        const knownAccountExists = !mainUsers.empty || !efUsers.empty;
+        if(!knownAccountExists) return false;
+        try{
+            await window.ummaAuth.registerAuthUser(email, password);
+            return true;
+        } catch (registerErr){
+            const code = String(registerErr?.code || "");
+            return code.includes("email-already-in-use");
+        }
+    } catch {
+        return false;
+    }
+}
+
 async function resolveCurrentPlayerWithRetry(retries = 2, waitMs = 200){
     for(let attempt = 0; attempt <= retries; attempt += 1){
         await resolveCurrentPlayer();
@@ -665,7 +702,8 @@ async function loginPlayer(){
         alert("Enter email and password.");
         return;
     }
-    if(!window.ummaAuth?.loginAuthUser){
+    const authReady = await waitForAuthApi();
+    if(!authReady || !window.ummaAuth?.loginAuthUser){
         alert("Auth is not ready yet. Please retry.");
         return;
     }
@@ -674,6 +712,13 @@ async function loginPlayer(){
     } catch (err){
         const code = String(err?.code || "");
         if(code.includes("user-not-found")){
+            const linked = await tryProvisionAuthFromKnownAccount(email, password);
+            if(linked){
+                try{
+                    await window.ummaAuth.loginAuthUser(email, password);
+                    return;
+                } catch {}
+            }
             alert("No account found with that email. Register first.");
             return;
         }
