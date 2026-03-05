@@ -15,6 +15,7 @@ let currentUser = null;
 let currentPlayer = null;
 let currentLeague = "";
 let currentMenuTarget = "efFixturesSection";
+let pendingRegistrationPlayerId = "";
 const EF_COLLECTIONS = {
     leagues: "efootball_leagues",
     fixtures: "efootball_fixtures",
@@ -83,6 +84,21 @@ function ensureLoadingApi(){
 
 function slug(value){
     return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "item";
+}
+
+function normalizeEmail(value){
+    return String(value || "").trim().toLowerCase();
+}
+
+async function resolveCurrentPlayerWithRetry(retries = 2, waitMs = 200){
+    for(let attempt = 0; attempt <= retries; attempt += 1){
+        await resolveCurrentPlayer();
+        if(currentPlayer) return currentPlayer;
+        if(attempt < retries){
+            await new Promise((res)=> setTimeout(res, waitMs));
+        }
+    }
+    return null;
 }
 
 function scoreText(result){
@@ -168,7 +184,7 @@ async function initEfootball(){
                     applyMenuView(currentMenuTarget);
                     return;
                 }
-                await resolveCurrentPlayer();
+                await resolveCurrentPlayerWithRetry(2, 220);
                 if(!currentPlayer){
                     document.getElementById("efLogoutBtn").style.display = "inline-block";
                     document.getElementById("efOpenRegisterBtn").style.display = "inline-block";
@@ -474,10 +490,11 @@ async function registerPlayer(){
     const playerName = String(document.getElementById("efPlayerName")?.value || "").trim();
     const phone = String(document.getElementById("efPhone")?.value || "").trim();
     const mpesaRef = String(document.getElementById("efMpesaRef")?.value || "").trim();
-    const email = String(document.getElementById("efEmail")?.value || "").trim().toLowerCase();
+    const email = normalizeEmail(document.getElementById("efEmail")?.value || "");
     const password = String(document.getElementById("efPassword")?.value || "");
     const league = String(document.getElementById("efLeagueSelect")?.value || "").trim();
     const fee = Number(getLeagueByName(league)?.fee || 0);
+    pendingRegistrationPlayerId = "";
     if(!playerName || !phone || !email || !password || !league){
         alert("Fill all registration fields.");
         return;
@@ -488,6 +505,10 @@ async function registerPlayer(){
     }
     if(!window.ummaAuth?.registerAuthUser){
         alert("Auth is not ready.");
+        return;
+    }
+    if(!window.ummaFire?.db){
+        alert("Database is not ready. Please retry.");
         return;
     }
     try{
@@ -513,58 +534,91 @@ async function registerPlayer(){
         return;
     }
     const playerId = user.uid;
-    await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.players, playerId), {
-        id: playerId,
-        uid: playerId,
-        playerName,
-        phone,
-        league,
-        mpesaRef: fee > 0 ? mpesaRef : "",
-        feePaid: fee,
-        paymentStatus: fee > 0 ? "Paid" : "Free",
-        status: "Active",
-        email,
-        updatedAtMs: Date.now()
-    }, { merge: true });
-    await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.users, playerId), {
-        id: playerId,
-        uid: playerId,
-        email,
-        playerName,
-        phone,
-        league,
-        role: "player",
-        status: "Active",
-        updatedAtMs: Date.now()
-    }, { merge: true });
+    pendingRegistrationPlayerId = playerId;
+    try{
+        await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.players, playerId), {
+            id: playerId,
+            uid: playerId,
+            playerName,
+            phone,
+            league,
+            mpesaRef: fee > 0 ? mpesaRef : "",
+            feePaid: fee,
+            paymentStatus: fee > 0 ? "Paid" : "Free",
+            status: "Active",
+            email,
+            updatedAtMs: Date.now()
+        }, { merge: true });
+        await setDoc(doc(window.ummaFire.db, EF_COLLECTIONS.users, playerId), {
+            id: playerId,
+            uid: playerId,
+            email,
+            playerName,
+            phone,
+            league,
+            role: "player",
+            status: "Active",
+            updatedAtMs: Date.now()
+        }, { merge: true });
 
-    clearEfCache();
-    await ensurePlayerStandingsRow(playerName, league);
-    await createFixturesForNewPlayer(playerName, league);
-    alert("Registered successfully. You are now logged in.");
-    await resolveCurrentPlayer();
-    closeLoginModal();
-    setAuthPanelVisible("");
-    applyMenuView("efFixturesSection");
-    scrollToSection("efAccountCard");
-    await renderAccount();
-    await renderFixtures();
-    await renderResults();
-    await renderStandings();
-    await renderMyMatches();
+        clearEfCache();
+        await ensurePlayerStandingsRow(playerName, league);
+        await createFixturesForNewPlayer(playerName, league);
+        await resolveCurrentPlayerWithRetry(3, 250);
+        if(!currentPlayer && pendingRegistrationPlayerId === playerId){
+            currentPlayer = {
+                id: playerId,
+                uid: playerId,
+                playerName,
+                phone,
+                league,
+                mpesaRef: fee > 0 ? mpesaRef : "",
+                feePaid: fee,
+                paymentStatus: fee > 0 ? "Paid" : "Free",
+                status: "Active",
+                email,
+                updatedAtMs: Date.now()
+            };
+        }
+        alert("Registered successfully. You are now logged in.");
+        closeLoginModal();
+        setAuthPanelVisible("");
+        applyMenuView("efFixturesSection");
+        scrollToSection("efAccountCard");
+        await renderAccount();
+        await renderFixtures();
+        await renderResults();
+        await renderStandings();
+        await renderMyMatches();
+    } finally {
+        pendingRegistrationPlayerId = "";
+    }
 }
 
 async function loginPlayer(){
-    const email = String(document.getElementById("efLoginEmail")?.value || "").trim().toLowerCase();
+    const email = normalizeEmail(document.getElementById("efLoginEmail")?.value || "");
     const password = String(document.getElementById("efLoginPassword")?.value || "");
     if(!email || !password){
         alert("Enter email and password.");
         return;
     }
+    if(!window.ummaAuth?.loginAuthUser){
+        alert("Auth is not ready yet. Please retry.");
+        return;
+    }
     try{
         await window.ummaAuth.loginAuthUser(email, password);
-    } catch {
-        alert("Invalid login credentials.");
+    } catch (err){
+        const code = String(err?.code || "");
+        if(code.includes("user-not-found")){
+            alert("No account found with that email. Register first.");
+            return;
+        }
+        if(code.includes("wrong-password") || code.includes("invalid-credential")){
+            alert("Incorrect password for that email.");
+            return;
+        }
+        alert("Login failed. Please try again.");
     }
 }
 

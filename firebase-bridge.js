@@ -223,11 +223,11 @@ onSnapshot(stateRef, snap=>{
 
 // ---------------- Auth Helpers ----------------
 async function registerAuthUser(email,password){
-  return createUserWithEmailAndPassword(auth,String(email).trim(),String(password));
+  return createUserWithEmailAndPassword(auth,String(email).trim().toLowerCase(),String(password));
 }
 
 async function loginAuthUser(email,password){
-  return signInWithEmailAndPassword(auth,String(email).trim(),String(password));
+  return signInWithEmailAndPassword(auth,String(email).trim().toLowerCase(),String(password));
 }
 
 async function logoutAuthUser(){
