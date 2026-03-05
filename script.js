@@ -1148,6 +1148,12 @@ async function loginClub(){
                     resolvedRole = String(userData.role || '').toLowerCase();
                     userTeam = String(userData.team || '');
                 }
+                if(!resolvedRole){
+                    const adminByUid = await getDoc(doc(window.ummaFire.db, 'admins', userId));
+                    if(adminByUid.exists()){
+                        resolvedRole = 'admin';
+                    }
+                }
             }
             if(!resolvedRole || !userTeam){
                 const matches = await getDocs(query(collection(window.ummaFire.db, 'users'), where('email', '==', email)));
@@ -1168,6 +1174,9 @@ async function loginClub(){
                         resolvedRole = 'club';
                     }
                 }
+            }
+            if(!resolvedRole && email === String(getDefaultAdminEmail()).toLowerCase()){
+                resolvedRole = 'admin';
             }
         } catch(err){
             console.error('login resolution failed', err);
